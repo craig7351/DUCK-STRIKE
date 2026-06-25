@@ -13,10 +13,11 @@ import { Effects } from './effects'
 import { WeaponSystem } from './weapons'
 import { EnemyManager, Enemy } from './enemies'
 import { PickupManager } from './pickups'
+import { GrenadeManager } from './grenades'
 import { Meta } from './meta'
 import {
   WEAPONS, WeaponId, ENEMIES, EnemyId, waveSpec, ECONOMY, PLAYER,
-  DIFFICULTIES, Difficulty, DROP, KILLSTREAK, PickupKind,
+  DIFFICULTIES, Difficulty, DROP, KILLSTREAK, PickupKind, GRENADE,
 } from './config'
 import { SFX, initAudio } from './sound'
 
@@ -59,6 +60,7 @@ export interface GameState {
   metaCoins: number
   board: { score: number; wave: number; date: string }[]
   runCoins: number         // 本場結束獲得的 meta 金幣
+  grenades: number         // 手榴彈攜帶數
 }
 
 export function createGameState(): GameState {
@@ -68,7 +70,7 @@ export function createGameState(): GameState {
     bestStreak: 0, hitMarker: 0, headshotMarker: 0, damageFlash: 0, message: '', owned: [], current: 'pistol', loadPct: 0,
     floats: [],
     difficulty: 'normal', frenzyT: 0, isBossWave: false, damageDir: 0, damageDirAt: 0,
-    metaCoins: 0, board: [], runCoins: 0,
+    metaCoins: 0, board: [], runCoins: 0, grenades: 0,
   }
 }
 
@@ -82,6 +84,7 @@ export class Game {
   weapons!: WeaponSystem
   enemies!: EnemyManager
   pickups!: PickupManager
+  grenades!: GrenadeManager
   state: GameState
 
   private spawnQueue: EnemyId[] = []
@@ -91,6 +94,7 @@ export class Game {
   private floatSeq = 0
   private diffCountMult = 1
   private diffReward = 1
+  private grenadeCd = 0
 
   constructor(canvas: HTMLCanvasElement, state: GameState) {
     this.state = state
@@ -140,6 +144,9 @@ export class Game {
 
     this.pickups = new PickupManager(s, this.player, (kind) => this.collect(kind))
     await this.pickups.preload()
+
+    this.grenades = new GrenadeManager(s, this.map, (pos) => this.grenadeExplode(pos))
+    await this.grenades.preload()
     this.state.loadPct = 80
 
     this.weapons = new WeaponSystem(
@@ -240,6 +247,29 @@ export class Game {
     this.addFloat(pos.add(new Vector3(0, 1.4, 0)), '💥', '#ff7a00', true)
   }
 
+  // ---- 手榴彈爆炸：範圍傷敵 + 自傷 + 引爆鄰近桶 ----
+  private grenadeExplode(pos: Vector3) {
+    const R = GRENADE.radius
+    this.effects.explosion(pos)
+    SFX.explode()
+    this.enemies.explodeDamage(pos, R, GRENADE.damage)
+    const pd = Vector3.Distance(this.player.position, pos)
+    if (pd < R && this.player.alive) {
+      this.player.takeDamage(GRENADE.damage * GRENADE.playerDmgFactor * (1 - pd / R))
+      this.registerDamageFrom(pos)
+      this.player.addShake(0.7)
+    } else if (pd < R * 2) {
+      this.player.addShake(0.35 * (1 - pd / (R * 2)))
+    }
+    this.addFloat(pos.add(new Vector3(0, 1.5, 0)), 'BOOM!', '#ff7a00', true)
+    // 引爆範圍內的爆炸桶（連鎖）
+    for (const b of this.map.barrels) {
+      if (!b.exploded && Vector3.Distance(b.pos, pos) < R) {
+        setTimeout(() => this.explodeBarrel(b), 80 + Math.random() * 120)
+      }
+    }
+  }
+
   // ---- 受擊方向（給 HUD 邊緣指示器）----
   private registerDamageFrom(pos: Vector3) {
     const dx = pos.x - this.player.position.x
@@ -309,6 +339,9 @@ export class Game {
     this.weapons.equip('pistol')
     this.enemies.reset()
     this.pickups.clear()
+    this.grenades.clear()
+    this.grenadeCd = 0
+    this.state.grenades = GRENADE.start
     this.state.floats.length = 0
     this.state.wave = 0
     this.beginWave(1)
@@ -317,6 +350,8 @@ export class Game {
   }
 
   private beginWave(wave: number) {
+    // 進入新一波補充手榴彈（第 1 波用起始量，不額外補）
+    if (wave > 1) this.state.grenades = Math.min(GRENADE.max, this.state.grenades + GRENADE.refillPerWave)
     this.state.wave = wave
     const spec = waveSpec(wave)
     this.state.isBossWave = spec.boss
@@ -463,10 +498,13 @@ export class Game {
 
     if (phase === 'playing') {
       if (this.input.justPressed('KeyB')) { this.openBuyMid(); }
+      if (this.grenadeCd > 0) this.grenadeCd -= dt
+      if (this.input.justPressed('KeyG')) this.tryThrowGrenade()
       this.player.update(dt)
       this.weapons.update(dt)
       this.enemies.update(dt)
       this.pickups.update(dt)
+      this.grenades.update(dt)
       this.effects.update(dt)
       this.tickWave(dt)
       this.syncStatusHud()
@@ -484,6 +522,17 @@ export class Game {
     // 遊玩中按 B：開購買選單（暫停動作）
     this.state.phase = 'buy'
     this.input.exitLock()
+  }
+
+  private tryThrowGrenade() {
+    if (this.grenadeCd > 0 || this.state.grenades <= 0 || !this.player.alive) return
+    this.state.grenades--
+    this.grenadeCd = GRENADE.cooldown
+    const cam = this.player.camera
+    const dir = cam.getForwardRay().direction.normalize()
+    const origin = cam.position.add(dir.scale(0.8))
+    this.grenades.throw(origin, dir)
+    SFX.throwGrenade()
   }
 
   private tickWave(dt: number) {

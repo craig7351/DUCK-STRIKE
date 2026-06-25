@@ -167,6 +167,23 @@ export const DROP = {
   pickupRadius: 1.8,
 }
 
+// 手榴彈（投擲物）：拋物線飛行、落地反彈、引信到時範圍爆炸
+export const GRENADE = {
+  start: 2,             // 每場起始數量
+  max: 4,               // 攜帶上限
+  refillPerWave: 1,     // 每進新一波補充
+  damage: 130,          // 中心最大傷害（依距離遞減）
+  radius: 6,            // 爆炸半徑（公尺）
+  fuse: 1.5,            // 引信秒數
+  throwSpeed: 17,       // 水平投擲初速
+  throwUp: 4.2,         // 上拋分量
+  cooldown: 0.55,       // 連續投擲冷卻（秒）
+  size: 0.32,           // 視覺模型高度（公尺）
+  restitution: 0.42,    // 反彈係數
+  friction: 0.66,       // 落地後水平摩擦
+  playerDmgFactor: 0.7, // 對玩家自傷比例
+}
+
 // 連殺獎勵門檻
 export const KILLSTREAK = {
   heal: 5,        // 連殺 5 → 回血

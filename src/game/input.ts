@@ -80,6 +80,7 @@ export class Input {
   consumeJump(): boolean { const j = this.jumpQueued; this.jumpQueued = false; return j }
   setCrouch(on: boolean) { this.touchCrouch = on }
   reloadPress() { this.pressed.add('KeyR') }
+  throwGrenade() { this.pressed.add('KeyG') }
   nextWeapon() { this.wheel += 1 }
   selectWeapon(code: string) { this.pressed.add(code) }
 

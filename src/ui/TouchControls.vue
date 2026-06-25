@@ -10,6 +10,7 @@ interface TouchInput {
   queueJump(): void
   setCrouch(on: boolean): void
   reloadPress(): void
+  throwGrenade(): void
   nextWeapon(): void
 }
 
@@ -59,6 +60,7 @@ function toggleAim() { aimOn.value = !aimOn.value; props.input.setAim(aimOn.valu
 function toggleCrouch() { crouchOn.value = !crouchOn.value; props.input.setCrouch(crouchOn.value) }
 function jump() { props.input.queueJump() }
 function reload() { props.input.reloadPress() }
+function grenade() { props.input.throwGrenade() }
 function nextW() { props.input.nextWeapon() }
 </script>
 
@@ -107,5 +109,9 @@ function nextW() { props.input.nextWeapon() }
     <button class="absolute rounded-full bg-black/30 border-2 border-white/30 text-white text-sm font-bold select-none active:bg-white/20"
       style="right:215px;bottom:165px;width:60px;height:60px;touch-action:none"
       @pointerdown.prevent="nextW">切槍</button>
+
+    <button class="absolute rounded-full bg-orange-500/30 border-2 border-orange-400/60 text-white text-2xl font-bold select-none active:bg-orange-500/60"
+      style="right:120px;bottom:235px;width:60px;height:60px;touch-action:none"
+      @pointerdown.prevent="grenade">💣</button>
   </div>
 </template>

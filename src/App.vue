@@ -100,7 +100,7 @@ function resume() { game?.resume() }
 
       <div class="mt-8 text-xs text-white/40 leading-relaxed">
         WASD 移動 · 滑鼠 瞄準 · 左鍵 射擊 · 右鍵 瞄準/開鏡<br>
-        R 換彈 · 1-5 換槍 · Q 軍刀 · Shift 跑 · Ctrl/C 蹲 · B 購買 · Esc 暫停
+        R 換彈 · G 手榴彈 · 1-5 換槍 · Q 軍刀 · Shift 跑 · Ctrl/C 蹲 · B 購買 · Esc 暫停
       </div>
     </div>
   </div>

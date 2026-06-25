@@ -94,6 +94,10 @@ function floatStyle(f: any) {
         <div class="text-3xl font-bold tabular-nums text-sky-300">{{ state.armor }}</div>
         <div class="text-xs tracking-widest text-white/60">ARMOR</div>
       </div>
+      <div>
+        <div class="text-3xl font-bold tabular-nums" :class="state.grenades > 0 ? 'text-orange-300' : 'text-white/30'">💣 {{ state.grenades }}</div>
+        <div class="text-xs tracking-widest text-white/60">GRENADE · G</div>
+      </div>
     </div>
   </div>
 
@@ -152,6 +156,6 @@ function floatStyle(f: any) {
 
   <!-- 提示列 -->
   <div class="absolute bottom-2 left-1/2 -translate-x-1/2 text-[11px] text-white/40 pointer-events-none">
-    WASD 移動 · 滑鼠 瞄準 · 左鍵 射擊 · 右鍵 瞄準 · R 換彈 · 1-5 換槍 · Shift 跑 · Ctrl 蹲 · B 購買
+    WASD 移動 · 滑鼠 瞄準 · 左鍵 射擊 · 右鍵 瞄準 · R 換彈 · G 手榴彈 · 1-5 換槍 · Shift 跑 · Ctrl 蹲 · B 購買
   </div>
 </template>

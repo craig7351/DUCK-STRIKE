@@ -81,4 +81,5 @@ export const SFX = {
   waveClear() { [523, 659, 784, 1046].forEach((f, i) => setTimeout(() => tone(f, 0.2, 'triangle', 0.22), i * 110)) },
   gameOver() { [440, 392, 330, 262].forEach((f, i) => setTimeout(() => tone(f, 0.4, 'sawtooth', 0.22, f * 0.8), i * 260)) },
   explode() { noise(0.4, 0.5, 800); tone(80, 0.4, 'sawtooth', 0.3, 40) },
+  throwGrenade() { noise(0.16, 0.18, 1200, 'bandpass'); tone(420, 0.12, 'triangle', 0.1, 180) },
 }
