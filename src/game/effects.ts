@@ -14,6 +14,11 @@ export class Effects {
   private flashTimer = 0
   private tracers: { mesh: Mesh; t: number }[] = []
   private sparkTex: Texture
+  // 爆炸用的短命動畫網格（閃光球 / 衝擊波環）：縮放 + 淡出後自動釋放
+  private transients: { mesh: Mesh; mat: StandardMaterial; t: number; dur: number; r0: number; r1: number; a0: number; flat: boolean }[] = []
+  // 敵人開火曳光彈（發光紅橘、會飛行的可見彈道）：物件池
+  private shotPool: { mesh: Mesh; from: Vector3; to: Vector3; t: number; dur: number; active: boolean }[] = []
+  private shotMat?: StandardMaterial
 
   constructor(scene: Scene) {
     this.scene = scene
@@ -118,7 +123,117 @@ export class Effects {
     setTimeout(() => { ps.stop(); setTimeout(() => ps.dispose(), 800) }, 120)
   }
 
+  /** 敵人開火曳光：發光彈道從 from 飛向 to（純視覺，不造成傷害）。 */
+  enemyTracer(from: Vector3, to: Vector3) {
+    if (!this.shotMat) {
+      const m = new StandardMaterial('enemyShotMat', this.scene)
+      m.emissiveColor = new Color3(1, 0.35, 0.12)   // 紅橘，配合 GlowLayer 發光
+      m.diffuseColor = new Color3(0, 0, 0)
+      m.disableLighting = true
+      this.shotMat = m
+    }
+    let s = this.shotPool.find((x) => !x.active)
+    if (!s) {
+      const mesh = MeshBuilder.CreateCylinder('enemyShot', { height: 1, diameter: 0.09, tessellation: 6 }, this.scene)
+      mesh.material = this.shotMat
+      mesh.isPickable = false
+      mesh.scaling.set(1, 0.6, 1)        // 短促的條狀彈道（沿 local Y）
+      mesh.setEnabled(false)
+      s = { mesh, from: Vector3.Zero(), to: Vector3.Zero(), t: 0, dur: 0, active: false }
+      this.shotPool.push(s)
+    }
+    const dist = Vector3.Distance(from, to)
+    s.active = true
+    s.from.copyFrom(from); s.to.copyFrom(to)
+    s.dur = Math.min(0.56, Math.max(0.14, dist / 35))   // 約 35 m/s 飛行（放慢一半）
+    s.t = s.dur
+    s.mesh.setEnabled(true)
+    s.mesh.position.copyFrom(from)
+    s.mesh.lookAt(to)                    // 對齊行進方向（+Z）
+    s.mesh.rotate(new Vector3(1, 0, 0), Math.PI / 2)   // 讓 cylinder 的 Y 沿 +Z
+  }
+
+  /** 強化爆炸：火球 + 煙霧 + 地面衝擊波環 + 閃光球。手榴彈 / 爆炸桶 / 自爆兵共用。 */
+  blast(pos: Vector3, radius = 6) {
+    this.explosion(pos)        // 既有火球粒子（核心）
+    this.smoke(pos)
+    this.flashBall(pos)
+    this.shockwave(pos, radius)
+  }
+
+  /** 上升煙霧（深灰、較慢、壽命長）。 */
+  private smoke(pos: Vector3) {
+    const ps = new ParticleSystem('smoke', 60, this.scene)
+    ps.particleTexture = this.sparkTex
+    ps.emitter = pos.clone()
+    ps.minEmitBox = new Vector3(-0.3, 0, -0.3); ps.maxEmitBox = new Vector3(0.3, 0.4, 0.3)
+    ps.color1 = new Color4(0.26, 0.26, 0.26, 0.7); ps.color2 = new Color4(0.12, 0.12, 0.12, 0.55)
+    ps.colorDead = new Color4(0.08, 0.08, 0.08, 0)
+    ps.minSize = 0.8; ps.maxSize = 2.4
+    ps.minLifeTime = 0.5; ps.maxLifeTime = 1.1
+    ps.emitRate = 220
+    ps.direction1 = new Vector3(-0.6, 1.5, -0.6); ps.direction2 = new Vector3(0.6, 3, 0.6)
+    ps.minEmitPower = 1; ps.maxEmitPower = 2.5
+    ps.gravity = new Vector3(0, 1.4, 0)        // 煙往上飄
+    ps.blendMode = ParticleSystem.BLENDMODE_STANDARD
+    ps.start()
+    setTimeout(() => { ps.stop(); setTimeout(() => ps.dispose(), 1300) }, 150)
+  }
+
+  /** 中心瞬間閃光球（加色、快速膨脹淡出）。 */
+  private flashBall(pos: Vector3) {
+    const m = MeshBuilder.CreateSphere('blastFlash', { diameter: 1, segments: 8 }, this.scene)
+    m.position.set(pos.x, Math.max(pos.y, 0.6), pos.z)
+    m.isPickable = false
+    const mat = new StandardMaterial('blastFlashMat', this.scene)
+    mat.emissiveColor = new Color3(1, 0.92, 0.7)
+    mat.diffuseColor = new Color3(0, 0, 0)
+    mat.disableLighting = true
+    mat.alphaMode = 1            // ALPHA_ADD
+    mat.backFaceCulling = false
+    m.material = mat
+    this.transients.push({ mesh: m, mat, t: 0.14, dur: 0.14, r0: 1.2, r1: 3.6, a0: 1, flat: false })
+  }
+
+  /** 地面衝擊波環（向外擴張、淡出）。 */
+  private shockwave(pos: Vector3, radius: number) {
+    const m = MeshBuilder.CreateTorus('shock', { diameter: 1, thickness: 0.16, tessellation: 40 }, this.scene)
+    m.position.set(pos.x, 0.12, pos.z)   // Babylon torus 預設躺平在 XZ 平面，免旋轉
+    m.isPickable = false
+    const mat = new StandardMaterial('shockMat', this.scene)
+    mat.emissiveColor = new Color3(1, 0.6, 0.2)
+    mat.diffuseColor = new Color3(0, 0, 0)
+    mat.disableLighting = true
+    mat.alphaMode = 1
+    mat.backFaceCulling = false
+    m.material = mat
+    this.transients.push({ mesh: m, mat, t: 0.45, dur: 0.45, r0: 0.6, r1: radius * 1.9, a0: 0.8, flat: true })
+  }
+
   update(dt: number) {
+    // 敵人曳光彈：沿 from→to 飛行，壽命到就回收
+    for (const s of this.shotPool) {
+      if (!s.active) continue
+      s.t -= dt
+      const p = 1 - Math.max(0, s.t) / s.dur
+      s.mesh.position.set(
+        s.from.x + (s.to.x - s.from.x) * p,
+        s.from.y + (s.to.y - s.from.y) * p,
+        s.from.z + (s.to.z - s.from.z) * p,
+      )
+      if (s.t <= 0) { s.active = false; s.mesh.setEnabled(false) }
+    }
+    // 短命動畫網格：依進度縮放 + 淡出
+    for (let i = this.transients.length - 1; i >= 0; i--) {
+      const x = this.transients[i]
+      x.t -= dt
+      const p = 1 - Math.max(0, x.t) / x.dur     // 0 → 1
+      const s = x.r0 + (x.r1 - x.r0) * p
+      if (x.flat) x.mesh.scaling.set(s, 1, s)     // 衝擊波環只在 XZ 擴張，貼地
+      else x.mesh.scaling.setAll(s)
+      x.mat.alpha = Math.max(0, 1 - p) * x.a0
+      if (x.t <= 0) { x.mesh.dispose(); x.mat.dispose(); this.transients.splice(i, 1) }
+    }
     if (this.flashTimer > 0) {
       this.flashTimer -= dt
       this.flashMat.alpha = Math.max(0, this.flashTimer / 0.05) * 0.95

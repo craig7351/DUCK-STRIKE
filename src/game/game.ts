@@ -94,7 +94,9 @@ export class Game {
   private floatSeq = 0
   private diffCountMult = 1
   private diffReward = 1
+  private diffBase = { hp: 1, dmg: 1, spd: 1 }   // 難度基準倍率（波次成長疊乘在上）
   private grenadeCd = 0
+  touchMode = false        // 觸控裝置（手機 / ?touch）：不請求指標鎖定，改用虛擬搖桿
 
   constructor(canvas: HTMLCanvasElement, state: GameState) {
     this.state = state
@@ -140,6 +142,7 @@ export class Game {
     this.enemies.onDamage = (point, amount, isHead) =>
       this.addFloat(point, String(Math.round(amount)), isHead ? '#ff5b5b' : '#ffffff', isHead)
     this.enemies.onBomberExplode = (pos, radius, dmg) => this.bomberExplode(pos, radius, dmg)
+    this.enemies.onEnemyShot = (from, to) => this.effects.enemyTracer(from, to)
     await this.enemies.preload()
 
     this.pickups = new PickupManager(s, this.player, (kind) => this.collect(kind))
@@ -164,7 +167,7 @@ export class Game {
     // 遊玩中若未鎖定（鎖定意外掉失），點擊畫面重新鎖定
     const canvas = this.engine.getRenderingCanvas()
     canvas?.addEventListener('mousedown', () => {
-      if (this.state.phase === 'playing' && !this.input.locked) this.input.requestLock()
+      if (!this.touchMode && this.state.phase === 'playing' && !this.input.locked) this.input.requestLock()
     })
 
     this.ready = true
@@ -206,7 +209,7 @@ export class Game {
     barrel.exploded = true
     const R = 6.5, maxDmg = 95
     const pos: Vector3 = barrel.pos
-    this.effects.explosion(pos)
+    this.effects.blast(pos, R)
     SFX.explode()
     // 隱藏視覺 + 移除碰撞
     barrel.holder.setEnabled(false)
@@ -234,7 +237,7 @@ export class Game {
 
   // ---- 自爆兵引爆 ----
   private bomberExplode(pos: Vector3, radius: number, dmg: number) {
-    this.effects.explosion(pos)
+    this.effects.blast(pos, radius)
     SFX.explode()
     const pd = Vector3.Distance(this.player.position, pos)
     if (pd < radius && this.player.alive) {
@@ -250,7 +253,7 @@ export class Game {
   // ---- 手榴彈爆炸：範圍傷敵 + 自傷 + 引爆鄰近桶 ----
   private grenadeExplode(pos: Vector3) {
     const R = GRENADE.radius
-    this.effects.explosion(pos)
+    this.effects.blast(pos, R)
     SFX.explode()
     this.enemies.explodeDamage(pos, R, GRENADE.damage)
     const pd = Vector3.Distance(this.player.position, pos)
@@ -319,7 +322,8 @@ export class Game {
     // 難度
     this.state.difficulty = difficulty
     const diff = DIFFICULTIES[difficulty]
-    this.enemies.diff = { hp: diff.enemyHp, dmg: diff.enemyDmg, spd: diff.enemySpeed }
+    this.diffBase = { hp: diff.enemyHp, dmg: diff.enemyDmg, spd: diff.enemySpeed }
+    this.enemies.diff = { ...this.diffBase }
     this.diffCountMult = diff.count
     this.diffReward = diff.reward
     // meta 永久加成
@@ -346,12 +350,24 @@ export class Game {
     this.state.wave = 0
     this.beginWave(1)
     this.state.phase = 'playing'
-    this.input.requestLock()
+    this.lockPointer()
   }
+
+  // 觸控模式不鎖指標（讓虛擬搖桿/按鈕可被點擊）；桌機鍵鼠才鎖
+  private lockPointer() { if (!this.touchMode) this.input.requestLock() }
 
   private beginWave(wave: number) {
     // 進入新一波補充手榴彈（第 1 波用起始量，不額外補）
     if (wave > 1) this.state.grenades = Math.min(GRENADE.max, this.state.grenades + GRENADE.refillPerWave)
+    // 隨波數成長：敵人越後面越強（血量 +12%/波、傷害 +7%/波、速度 +2%/波 上限 1.5），疊乘在難度基準上
+    const hpScale = 1 + (wave - 1) * 0.12
+    const dmgScale = 1 + (wave - 1) * 0.07
+    const spdScale = Math.min(1.5, 1 + (wave - 1) * 0.02)
+    this.enemies.diff = {
+      hp: this.diffBase.hp * hpScale,
+      dmg: this.diffBase.dmg * dmgScale,
+      spd: this.diffBase.spd * spdScale,
+    }
     this.state.wave = wave
     const spec = waveSpec(wave)
     this.state.isBossWave = spec.boss
@@ -466,7 +482,7 @@ export class Game {
     if (this.state.phase !== 'buy') return
     this.beginWave(this.state.wave + 1)
     this.state.phase = 'playing'
-    this.input.requestLock()
+    this.lockPointer()
   }
 
   pause() {
@@ -478,7 +494,7 @@ export class Game {
   resume() {
     if (this.state.phase === 'paused') {
       this.state.phase = 'playing'
-      this.input.requestLock()
+      this.lockPointer()
     }
   }
 

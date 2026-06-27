@@ -32,6 +32,7 @@ function tick() { now.value = performance.now(); raf = requestAnimationFrame(tic
 
 onMounted(async () => {
   game = new Game(canvas.value!, state)
+  game.touchMode = isMobile.value
   inputRef.value = game.input
   await game.init()
   refreshMeta()
@@ -98,7 +99,22 @@ function resume() { game?.resume() }
         </div>
       </div>
 
-      <div class="mt-8 text-xs text-white/40 leading-relaxed">
+      <!-- 玩法說明 -->
+      <div class="mt-6 mx-auto max-w-2xl text-left bg-white/5 border border-white/10 rounded-xl px-5 py-4">
+        <div class="text-yellow-400 font-bold text-sm tracking-widest mb-2">玩法說明</div>
+        <div class="grid grid-cols-2 gap-x-6 gap-y-1.5 text-xs text-white/70 leading-relaxed">
+          <div>🎯 <b class="text-white/90">無盡波次生存</b>：撐越久波數越高分越高；敵人越後面越多、越強。</div>
+          <div>👑 <b class="text-white/90">每 5 波王波</b>：擊敗放大的紫色王，必掉補給。</div>
+          <div>🔫 <b class="text-white/90">戰鬥</b>：左鍵射擊、右鍵瞄準、G 丟手榴彈，可射爆場上爆炸桶連鎖。</div>
+          <div>🛒 <b class="text-white/90">軍火庫</b>：波間按 B 買槍 / 補彈 / 護甲。</div>
+          <div>🔥 <b class="text-white/90">連殺獎勵</b>：5 連回血、10 連狂暴、15 連補滿彈藥。</div>
+          <div>💊 <b class="text-white/90">掉落</b>：補血 / 彈藥 / 限時狂暴，走過自動拾取。</div>
+          <div>👾 <b class="text-white/90">敵種</b>：雜兵(遠程)、突擊兵(衝刺)、刀兵(衝鋒砍擊)、重裝兵(厚血)、自爆兵(貼身爆炸)。</div>
+          <div>★ <b class="text-white/90">永久升級</b>：用星幣解鎖跨場永久強化。</div>
+        </div>
+      </div>
+
+      <div class="mt-6 text-xs text-white/40 leading-relaxed">
         WASD 移動 · 滑鼠 瞄準 · 左鍵 射擊 · 右鍵 瞄準/開鏡<br>
         R 換彈 · G 手榴彈 · 1-5 換槍 · Q 軍刀 · Shift 跑 · Ctrl/C 蹲 · B 購買 · Esc 暫停
       </div>

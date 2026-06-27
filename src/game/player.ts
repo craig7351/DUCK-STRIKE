@@ -172,13 +172,12 @@ export class Player {
 
   private syncCamera() {
     this.camera.position.set(this.body.position.x, this.eyeY, this.body.position.z)
-    // trauma 平方讓小震動柔和、大震動明顯；加在 rotation offset 上，不影響實際瞄準 yaw/pitch
+    // trauma 平方讓小震動柔和、大震動明顯；只抖 pitch/yaw，不滾轉 roll（避免地平線歪掉暈眩）
     const s = this.shakeTrauma * this.shakeTrauma
     if (s > 0.0001) {
       const sp = (Math.random() * 2 - 1) * s * 0.05
       const sy = (Math.random() * 2 - 1) * s * 0.05
-      const sr = (Math.random() * 2 - 1) * s * 0.08
-      this.camera.rotation.set(this.pitch + sp, this.yaw + sy, sr)
+      this.camera.rotation.set(this.pitch + sp, this.yaw + sy, 0)
     } else {
       this.camera.rotation.set(this.pitch, this.yaw, 0)
     }

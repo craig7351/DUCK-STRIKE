@@ -35,6 +35,8 @@ export class Enemy {
   private attackCd = 0
   private overlayT = 0
   private deathT = 0
+  private detourSign = 1     // 繞行慣用側（避免左右抖動）
+  private detourT = 0        // 繞行計時：>0 時暫時不直走、固定繞同一側
   private curAnim: AnimationGroup | null = null
   private targetHeight: number
   exploding = false               // 自爆兵：本幀觸發自爆
@@ -48,6 +50,7 @@ export class Enemy {
   private maxHpRuntime = 0
   bossFire?: (pos: Vector3, dir: Vector3, speed: number, dmg: number) => void
   bossSummon?: (n: number) => void
+  shoot?: (from: Vector3, to: Vector3) => void   // 開火曳光（視覺）
   // 頭頂血條
   private barBG!: Mesh
   private barFill!: Mesh
@@ -135,6 +138,7 @@ export class Enemy {
     this.active = true
     this.deathT = 0
     this.attackCd = 0
+    this.detourT = 0
     this.exploding = false
     this.inst.holder.setEnabled(true)
     this.inst.holder.position.copyFrom(pos)
@@ -221,7 +225,21 @@ export class Enemy {
       this.attackCd -= dt
       if (this.attackCd <= 0) {
         this.attackCd = 60 / this.def.rpm
-        if (Math.random() < this.def.accuracy) dmgDealt += this.def.damage * this.mods.dmg
+        if (this.def.melee) {
+          // 近戰：貼身必中，揮刀音效，不射曳光
+          dmgDealt += this.def.damage * this.mods.dmg
+          SFX.shoot('knife')
+        } else {
+          const hit = Math.random() < this.def.accuracy
+          if (hit) dmgDealt += this.def.damage * this.mods.dmg
+          // 可見曳光：命中=直射玩家，未命中=偏一點從旁掠過
+          if (this.shoot) {
+            const from = pos.add(new Vector3(0, 1.4, 0)).add(dir.scale(0.5))
+            const to = player.position.clone()
+            if (!hit) { to.x += (Math.random() - 0.5) * 2.4; to.y += (Math.random() - 0.5) * 1.2; to.z += (Math.random() - 0.5) * 2.4 }
+            this.shoot(from, to)
+          }
+        }
       }
       // 近戰型仍會稍微逼近
       if (this.def.range <= 8 && dist > 1.6) this.move(dir, dt, map, pos)
@@ -257,7 +275,7 @@ export class Enemy {
   private castBarrage(player: Player) {
     if (!this.bossFire) return
     const origin = this.inst.holder.position.add(new Vector3(0, 1.6, 0))
-    const speed = 12
+    const speed = 6                  // 王彈幕速度放慢一半
     const dmg = this.def.damage * 0.7 * this.mods.dmg
     if (this.bossCastType === 0) {
       const n = 18
@@ -270,7 +288,7 @@ export class Enemy {
       const base = Math.atan2(to.x, to.z)
       for (let k = -2; k <= 2; k++) {
         const a = base + k * 0.16
-        this.bossFire(origin, new Vector3(Math.sin(a), 0, Math.cos(a)), speed + 2, dmg)
+        this.bossFire(origin, new Vector3(Math.sin(a), 0, Math.cos(a)), speed + 1, dmg)
       }
     }
     this.bossCastType ^= 1
@@ -280,21 +298,41 @@ export class Enemy {
   /** 立即停用（重開遊戲清場用）。 */
   despawn() { this.deactivate() }
 
-  private move(dir: Vector3, dt: number, map: GameMap, pos: Vector3) {
+  private move(dir: Vector3, dt: number, map: GameMap, pos: Vector3): boolean {
     const step = this.def.speed * this.mods.spd * dt
-    // 簡易避障：直走被擋就試左右偏轉
-    const candidates = [0, 0.6, -0.6, 1.2, -1.2]
-    for (const off of candidates) {
-      const c = Math.cos(off), s = Math.sin(off)
-      const nd = new Vector3(dir.x * c - dir.z * s, 0, dir.x * s + dir.z * c)
-      const nx = pos.x + nd.x * step
-      const nz = pos.z + nd.z * step
-      const h = WORLD.arenaHalf - 1
-      if (!map.blocked(nx, nz, 0.6) && Math.abs(nx) < h && Math.abs(nz) < h) {
-        pos.x = nx; pos.z = nz
-        return
+    const h = WORLD.arenaHalf - 1
+    const apply = (vx: number, vz: number) => {
+      const nx = pos.x + vx, nz = pos.z + vz
+      if (!map.blocked(nx, nz, 0.5) && Math.abs(nx) < h && Math.abs(nz) < h) { pos.x = nx; pos.z = nz; return true }
+      return false
+    }
+    if (this.detourT > 0) this.detourT -= dt
+
+    // 1) 直接朝目標（繞行中暫時略過，避免在角落來回抖）
+    if (this.detourT <= 0 && apply(dir.x * step, dir.z * step)) return true
+
+    // 2) 沿軸滑行：分別只走 X 或只走 Z 分量（軸對齊的牆/箱子可順順滑過）
+    if (Math.abs(dir.x) > 0.05 && apply(dir.x * step, 0)) return true
+    if (Math.abs(dir.z) > 0.05 && apply(0, dir.z * step)) return true
+
+    // 3) 角度偏轉：慣用側優先，左右交替，角度由小到大（最多近 ±110°）可繞過障礙與轉角
+    const angles = [0.45, 0.9, 1.35, 1.9]
+    for (const a of angles) {
+      for (const sgn of [this.detourSign, -this.detourSign]) {
+        const ang = a * sgn
+        const c = Math.cos(ang), s = Math.sin(ang)
+        const nd = new Vector3(dir.x * c - dir.z * s, 0, dir.x * s + dir.z * c)
+        if (apply(nd.x * step, nd.z * step)) {
+          if (a >= 0.9) { this.detourSign = sgn >= 0 ? 1 : -1; this.detourT = 0.5 }  // 需大幅繞行→鎖定這側一陣子
+          return true
+        }
       }
     }
+
+    // 4) 完全卡住 → 換邊再繞
+    this.detourSign = -this.detourSign
+    this.detourT = 0.6
+    return false
   }
 
   private hasLOS(from: Vector3, to: Vector3, scene: Scene): boolean {
@@ -328,6 +366,7 @@ export class EnemyManager {
   onKill: (e: Enemy, isHead: boolean) => void
   onDamage?: (point: Vector3, amount: number, isHead: boolean) => void
   onBomberExplode?: (pos: Vector3, radius: number, dmg: number) => void
+  onEnemyShot?: (from: Vector3, to: Vector3) => void
   bullets: BulletManager
 
   constructor(scene: Scene, player: Player, map: GameMap, onPlayerDamage: (d: number, from: Vector3 | null) => void, onKill: (e: Enemy, h: boolean) => void) {
@@ -347,6 +386,7 @@ export class EnemyManager {
     const inst = instantiate(this.scene, model, scale, ANIM_NAMES, true)
     inst.holder.setEnabled(false)
     const e = new Enemy(this.scene, def, inst, targetHeight)
+    e.shoot = (from, to) => this.onEnemyShot?.(from, to)
     if (def.boss) {
       e.bossFire = (pos, dir, speed, dmg) => this.bullets.spawn(pos, dir, speed, dmg)
       e.bossSummon = (n) => this.summonAround(e, n)

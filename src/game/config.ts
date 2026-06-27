@@ -89,7 +89,7 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
   },
 }
 
-export type EnemyId = 'grunt' | 'rusher' | 'hazmat' | 'bomber' | 'boss'
+export type EnemyId = 'grunt' | 'rusher' | 'hazmat' | 'bomber' | 'boss' | 'slasher'
 
 export interface EnemyDef {
   id: EnemyId
@@ -106,6 +106,7 @@ export interface EnemyDef {
   suicide?: boolean     // 自爆兵：接近後引爆
   explodeRadius?: number
   explodeDmg?: number
+  melee?: boolean       // 近戰兵：貼身砍擊（不開槍、不射曳光）
   boss?: boolean
   tint?: [number, number, number] // 模型染色（區別兵種）
 }
@@ -115,6 +116,7 @@ export const ENEMIES: Record<EnemyId, EnemyDef> = {
   rusher: { id: 'rusher', name: '突擊兵', model: 'enemy',  hp: 70,  speed: 5.4, damage: 14, rpm: 50,  range: 6,  accuracy: 0.6,  reward: 350, scale: 0.92 },
   hazmat: { id: 'hazmat', name: '重裝兵', model: 'hazmat', hp: 240, speed: 2.4, damage: 16, rpm: 70,  range: 28, accuracy: 0.45, reward: 600, scale: 1.05 },
   bomber: { id: 'bomber', name: '自爆兵', model: 'enemy',  hp: 55,  speed: 6.2, damage: 0,  rpm: 1,   range: 2.6, accuracy: 1, reward: 450, scale: 0.95, suicide: true, explodeRadius: 4.5, explodeDmg: 55, tint: [1, 0.35, 0.1] },
+  slasher:{ id: 'slasher',name: '刀兵',   model: 'soldier',hp: 95,  speed: 7.0, damage: 20, rpm: 70,  range: 2.4, accuracy: 1, reward: 420, scale: 1.0, melee: true },
   boss:   { id: 'boss',   name: '王',     model: 'hazmat', hp: 1600, speed: 2.7, damage: 24, rpm: 90, range: 34, accuracy: 0.55, reward: 3500, scale: 2.3, boss: true, tint: [0.7, 0.1, 0.7] },
 }
 
@@ -129,19 +131,19 @@ export const ECONOMY = {
 export interface WaveSpec { count: number; types: EnemyId[]; concurrent: number; boss: boolean }
 export function waveSpec(wave: number): WaveSpec {
   if (wave % 5 === 0) {
-    // 王波：1 隻王 + 一群小兵
+    // 王波：N 隻王 + 一大群小兵
     const bossCount = Math.floor(wave / 5)            // 第10波2隻、15波3隻…
     const types: EnemyId[] = []
     for (let i = 0; i < bossCount; i++) types.push('boss')
-    return { count: bossCount + 4 + Math.floor(wave / 5), types, concurrent: 4, boss: true }
+    return { count: bossCount + 6 + Math.floor(wave / 3), types, concurrent: 6, boss: true }
   }
-  const count = 4 + Math.floor(wave * 1.8)
-  const concurrent = Math.min(4 + Math.floor(wave / 2), 9)
+  const count = 5 + Math.floor(wave * 2.6)
+  const concurrent = Math.min(5 + Math.floor(wave * 0.7), 14)
   const types: EnemyId[] = ['grunt']
   if (wave >= 2) types.push('rusher')
-  if (wave >= 3) types.push('grunt', 'rusher')
+  if (wave >= 3) types.push('grunt', 'rusher', 'slasher')
   if (wave >= 4) types.push('hazmat', 'bomber')
-  if (wave >= 6) types.push('hazmat', 'rusher', 'bomber')
+  if (wave >= 6) types.push('hazmat', 'rusher', 'bomber', 'slasher')
   return { count, types, concurrent, boss: false }
 }
 
@@ -172,10 +174,10 @@ export const GRENADE = {
   start: 2,             // 每場起始數量
   max: 4,               // 攜帶上限
   refillPerWave: 1,     // 每進新一波補充
-  damage: 130,          // 中心最大傷害（依距離遞減）
-  radius: 6,            // 爆炸半徑（公尺）
+  damage: 260,          // 中心最大傷害（依距離遞減）×2
+  radius: 12,           // 爆炸半徑（公尺）×2
   fuse: 1.5,            // 引信秒數
-  throwSpeed: 17,       // 水平投擲初速
+  throwSpeed: 34,       // 水平投擲初速（拋出距離 ×2）
   throwUp: 4.2,         // 上拋分量
   cooldown: 0.55,       // 連續投擲冷卻（秒）
   size: 0.32,           // 視覺模型高度（公尺）

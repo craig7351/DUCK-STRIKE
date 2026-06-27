@@ -11,6 +11,9 @@ import { WORLD } from './config'
 
 export interface Cover { min: Vector3; max: Vector3 } // 給 AI 用的 AABB（俯視）
 
+// 鏤空 / 透空物件：仍阻擋走位，但子彈與視線可從縫隙穿過（不擋射線/LOS）
+const SEE_THROUGH = new Set(['fence', 'fence_long', 'metalfence', 'barrier_single', 'barrier_large', 'tree_1', 'tree_2'])
+
 // 可引爆的桶（爆炸桶 / 瓦斯桶）
 export interface Barrel {
   holder: TransformNode
@@ -137,6 +140,48 @@ export class GameMap {
     ['watertank_floor', -34, -30, 0, 6, true],
     ['debris_brokencar', 30, 30, 45, 2.4, true],
     ['tank', -32, 32, 30, 3, true],
+
+    // ── 擴充：柵欄分隔動線（破壞長距離視線，製造側翼路線）──
+    ['fence_long', -20, 12, 0, 1.4, true],
+    ['fence_long', 20, -12, 0, 1.4, true],
+    ['metalfence', -16, -20, 90, 1.6, true],
+    ['metalfence', 16, 20, 90, 1.6, true],
+    ['fence', 7, -16, 0, 1.2, true],
+    ['fence', -7, 16, 0, 1.2, true],
+    ['fence', 24, 2, 90, 1.2, true],
+    ['fence', -24, -2, 90, 1.2, true],
+    // ── 擴充：更多木箱 / 紙箱掩體 ──
+    ['crate', -24, -7, 0, 1.6, true],
+    ['crate', 24, 7, 0, 1.6, true],
+    ['crate', 0, -25, 0, 1.6, true],
+    ['cardboardboxes_1', -2, -10, 30, 1.4, true],
+    ['cardboardboxes_2', 2, 10, -30, 1.4, true],
+    ['cardboardboxes_1', -28, 6, 0, 1.4, true],
+    // ── 擴充：棧板（低矮地面裝飾，不阻擋）──
+    ['pallet', -18, 13, 20, 0.3, false],
+    ['pallet', 18, -13, -20, 0.3, false],
+    ['pallet', 9, 13, 0, 0.3, false],
+    ['pallet', -9, -13, 0, 0.3, false],
+    // ── 擴充：更多爆炸桶 / 瓦斯桶（手榴彈連鎖更爽）──
+    ['explodingbarrel', 20, 14, 0, 1.4, true],
+    ['explodingbarrel', -20, -14, 0, 1.4, true],
+    ['explodingbarrel', -3, 21, 0, 1.4, true],
+    ['gastank', 26, -16, 0, 2.2, true],
+    ['gastank', 3, -21, 0, 2.2, true],
+    // ── 擴充：路牌（薄、不阻擋，氛圍用）──
+    ['sign', -44, 10, 90, 3, false],
+    ['sign', 44, -10, 90, 3, false],
+    ['sign', -14, 4, 0, 2.6, false],
+    // ── 擴充：交通錐散佈 ──
+    ['trafficcone', 14, -3, 0, 0.8, false],
+    ['trafficcone', -14, 3, 0, 0.8, false],
+    ['trafficcone', 9, -19, 0, 0.8, false],
+    ['trafficcone', -9, 19, 0, 0.8, false],
+    // ── 擴充：對角區更多大型場景裝飾 ──
+    ['tree_2', -38, -38, 0, 6, true],
+    ['debris_brokencar', -32, -32, 20, 2.4, true],
+    ['tree_1', 34, -34, 0, 6, true],
+    ['watertank_floor', 34, 14, 0, 6, true],
   ]
 
   private async buildProps() {
@@ -151,7 +196,7 @@ export class GameMap {
         inst.meshes.forEach((m) => { m.isPickable = false })
         const isBarrel = name === 'explodingbarrel' || name === 'gastank'
         if (isBarrel) this.addBarrel(name, inst.holder, model.size, scale, x, z, th, rotDeg)
-        else if (collide) this.addBoxCollider(inst.holder, model.size, scale, x, z, th, rotDeg)
+        else if (collide) this.addBoxCollider(inst.holder, model.size, scale, x, z, th, rotDeg, !SEE_THROUGH.has(name))
       } catch (e) {
         console.warn('prop load failed', name, e)
       }
@@ -159,15 +204,16 @@ export class GameMap {
   }
 
   // 用不可見 box 當碰撞體（比 glTF mesh 碰撞穩定且便宜）
-  private addBoxCollider(holder: TransformNode, size: Vector3, scale: number, x: number, z: number, h: number, rotDeg: number) {
+  private addBoxCollider(holder: TransformNode, size: Vector3, scale: number, x: number, z: number, h: number, rotDeg: number, blockShots = true) {
     const w = Math.max(size.x * scale, 0.6)
     const d = Math.max(size.z * scale, 0.6)
     const box = MeshBuilder.CreateBox('col', { width: w, height: h, depth: d }, this.scene)
     box.position.set(x, h / 2, z)
     box.rotation.y = (rotDeg * Math.PI) / 180
-    box.checkCollisions = true
+    box.checkCollisions = true        // 仍阻擋玩家走位
     box.isVisible = false
-    box.metadata = { world: true }
+    if (blockShots) box.metadata = { world: true }   // 實心：阻擋射線 / LOS
+    else box.isPickable = false                        // 鏤空：子彈與視線穿過縫隙
     this.colliders.push(box)
     // AABB（不考慮旋轉，取較大邊當保守半徑）給 AI 避障
     const r = Math.max(w, d) / 2

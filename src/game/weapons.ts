@@ -27,6 +27,7 @@ interface WeaponInstance {
   holder: TransformNode | null
   mag: number
   reserve: number
+  muzzle: TransformNode | null   // 槍管尖端節點（掛在 holder 下，跟著晃動/後座）
 }
 
 const GUN_TARGET_LEN = 0.34 // 視角模型統一長度（公尺，最長邊）
@@ -82,7 +83,16 @@ export class WeaponSystem {
     holder.setEnabled(false)
     // 視角模型不被自己的射線/碰撞影響
     inst.meshes.forEach((m) => { m.isPickable = false; m.checkCollisions = false })
-    this.slots[id] = { def, holder, mag: def.magSize, reserve: def.reserve }
+    // 槍口節點：掛在 holder 下，定位在模型包圍盒的槍管尖端（素材槍管沿 local +X）。
+    // footOnGround 已把模型沿 Y 下移 minY，故節點 Y 用相對高度；X 取最前端、Z 取中心。
+    const muzzle = new TransformNode(`muzzle_${id}`, this.scene)
+    muzzle.parent = holder
+    muzzle.position.set(
+      model.max.x,
+      (model.min.y + model.max.y) / 2 - model.minY,   // 約槍身中線（含貼地補償）
+      (model.min.z + model.max.z) / 2,
+    )
+    this.slots[id] = { def, holder, mag: def.magSize, reserve: def.reserve, muzzle }
   }
 
   async giveWeapon(id: WeaponId, autoEquip = true) {
@@ -195,17 +205,16 @@ export class WeaponSystem {
     return dir.add(right.scale(Math.cos(a) * r)).add(realUp.scale(Math.sin(a) * r)).normalize()
   }
 
-  // 槍口位置改用相機相對偏移，與槍模型朝向解耦（避免模型軸向不同造成偏差）
+  // 槍口位置：直接讀槍口節點的世界座標（精準落在槍管尖端，且跟著晃動/後座/開鏡）。
   private muzzleWorldPos(): Vector3 {
+    const m = this.cur.muzzle
+    if (m) {
+      m.computeWorldMatrix(true)
+      return m.getAbsolutePosition()
+    }
+    // 後備：相機相對偏移
     const cam = this.player.camera
-    const fwd = cam.getForwardRay().direction
-    const right = Vector3.Cross(fwd, Vector3.Up()).normalize()
-    const up = Vector3.Cross(right, fwd).normalize()
-    const aim = this.player.aiming
-    return cam.position
-      .add(fwd.scale(0.6))
-      .add(right.scale(aim ? 0.0 : 0.14))
-      .add(up.scale(aim ? -0.02 : -0.1))
+    return cam.position.add(cam.getForwardRay().direction.normalize().scale(0.6))
   }
 
   update(dt: number) {

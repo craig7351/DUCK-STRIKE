@@ -13,6 +13,8 @@ export interface LoadedModel {
   container: AssetContainer
   size: Vector3       // 模板原始包圍盒尺寸
   minY: number
+  min: Vector3        // 包圍盒最小角（模型本地座標）
+  max: Vector3        // 包圍盒最大角
 }
 
 const cache = new Map<string, Promise<LoadedModel>>()
@@ -29,7 +31,7 @@ export function loadModel(scene: Scene, url: string): Promise<LoadedModel> {
     const size = max.subtract(min)
     const minY = min.y
     container.removeAllFromScene()
-    return { container, size, minY }
+    return { container, size, minY, min: min.clone(), max: max.clone() }
   })
   cache.set(url, p)
   return p
