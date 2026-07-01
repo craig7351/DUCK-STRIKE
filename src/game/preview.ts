@@ -4,7 +4,7 @@
 // ============================================================================
 import {
   Engine, Scene, ArcRotateCamera, HemisphericLight, DirectionalLight, Vector3, Color3, Color4,
-  LoadAssetContainerAsync, AssetContainer, AbstractMesh, Tools,
+  LoadAssetContainerAsync, AssetContainer, AbstractMesh,
 } from '@babylonjs/core'
 import '@babylonjs/loaders/glTF'
 
@@ -41,8 +41,10 @@ async function renderOne(url: string): Promise<string> {
     const r = Math.max(max.x - min.x, max.y - min.y, max.z - min.z) || 1
     cam.target = center
     cam.radius = r * 1.9
-    s.render()
-    const data = await Tools.CreateScreenshotAsync(engine!, cam, { width: 220, height: 220 })
+    // 等材質就緒後渲染兩幀，再直接從 backbuffer 截圖（preserveDrawingBuffer）
+    await new Promise<void>((res) => s.executeWhenReady(() => res()))
+    s.render(); s.render()
+    const data = (engine!.getRenderingCanvas() as HTMLCanvasElement).toDataURL('image/png')
     return data
   } finally {
     if (container) { container.removeAllFromScene(); container.dispose() }
