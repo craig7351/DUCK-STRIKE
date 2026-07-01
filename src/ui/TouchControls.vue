@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onUnmounted } from 'vue'
 import type { GameState } from '../game/game'
 import { ULTIMATE } from '../game/config'
 
@@ -85,6 +85,36 @@ function reload() { props.input.reloadPress() }
 function grenade() { props.input.throwGrenade() }
 function ult() { props.input.activateUlt() }
 function nextW() { props.input.nextWeapon() }
+
+// ---- 陀螺儀看視（相對角度差餵進 addLook；與拖曳看視並存）----
+const GYRO_SENS = 8          // 每度轉動 ≈ 8px 看視（約 1:1 視角）
+const gyroOn = ref(false)
+let gyroLast: { a: number; b: number } | null = null
+function onOrient(e: DeviceOrientationEvent) {
+  if (e.alpha == null || e.beta == null) return
+  if (gyroLast) {
+    let dYaw = e.alpha - gyroLast.a
+    if (dYaw > 180) dYaw -= 360; else if (dYaw < -180) dYaw += 360   // 指北角度環繞處理
+    const dPitch = e.beta - gyroLast.b
+    props.input.addLook(-dYaw * GYRO_SENS, dPitch * GYRO_SENS)
+  }
+  gyroLast = { a: e.alpha, b: e.beta }
+}
+async function toggleGyro() {
+  if (gyroOn.value) {
+    window.removeEventListener('deviceorientation', onOrient)
+    gyroLast = null; gyroOn.value = false
+    return
+  }
+  const DOE = (window as unknown as { DeviceOrientationEvent?: { requestPermission?: () => Promise<string> } }).DeviceOrientationEvent
+  if (DOE && typeof DOE.requestPermission === 'function') {   // iOS 13+ 需授權
+    try { if ((await DOE.requestPermission()) !== 'granted') return } catch { return }
+  }
+  gyroLast = null
+  window.addEventListener('deviceorientation', onOrient)
+  gyroOn.value = true
+}
+onUnmounted(() => window.removeEventListener('deviceorientation', onOrient))
 </script>
 
 <template>
@@ -136,6 +166,12 @@ function nextW() { props.input.nextWeapon() }
     <button class="absolute rounded-full bg-black/35 border-2 border-white/30 text-white text-xs font-bold active:bg-white/20"
       style="right:212px;bottom:110px;width:56px;height:56px;touch-action:none"
       @pointerdown.prevent="nextW">切槍</button>
+
+    <!-- 陀螺儀看視開關 -->
+    <button class="absolute rounded-full border-2 text-white text-xs font-bold select-none"
+      :class="gyroOn ? 'bg-green-500/50 border-green-300' : 'bg-black/35 border-white/30'"
+      style="right:212px;bottom:180px;width:56px;height:56px;touch-action:none"
+      @pointerdown.prevent="toggleGyro">陀螺儀</button>
 
     <!-- 手榴彈（顯示剩餘數） -->
     <button class="absolute rounded-full border-2 flex flex-col items-center justify-center leading-none active:scale-95"
