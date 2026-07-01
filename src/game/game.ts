@@ -263,7 +263,8 @@ export class Game {
     this.enemies.explodeDamage(pos, R, GRENADE.damage)
     const pd = Vector3.Distance(this.player.position, pos)
     if (pd < R && this.player.alive) {
-      this.player.takeDamage(GRENADE.damage * GRENADE.playerDmgFactor * (1 - pd / R))
+      const selfDmg = Math.min(GRENADE.selfDmgMax, GRENADE.damage * GRENADE.playerDmgFactor * (1 - pd / R))
+      this.player.takeDamage(selfDmg)
       this.registerDamageFrom(pos)
       this.player.addShake(0.7)
     } else if (pd < R * 2) {

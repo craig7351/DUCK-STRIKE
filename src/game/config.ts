@@ -187,6 +187,7 @@ export const GRENADE = {
   restitution: 0.42,    // 反彈係數
   friction: 0.66,       // 落地後水平摩擦
   playerDmgFactor: 0.7, // 對玩家自傷比例
+  selfDmgMax: 10,       // 自傷上限（最多扣這麼多 HP）
 }
 
 // 連殺獎勵門檻

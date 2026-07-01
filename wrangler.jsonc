@@ -8,7 +8,7 @@
     {
       "binding": "DB",
       "database_name": "duck-strike-db",
-      "database_id": "REPLACE_WITH_ID_FROM_wrangler_d1_create"
+      "database_id": "6f3ce6f9-91bf-4996-a94c-6fc8096f1da7"
     }
   ]
 }
