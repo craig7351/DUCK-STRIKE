@@ -17,7 +17,7 @@ import { GrenadeManager } from './grenades'
 import { Meta } from './meta'
 import {
   WEAPONS, WeaponId, ENEMIES, EnemyId, waveSpec, ECONOMY, PLAYER,
-  DIFFICULTIES, Difficulty, DROP, KILLSTREAK, PickupKind, GRENADE,
+  DIFFICULTIES, Difficulty, DROP, KILLSTREAK, PickupKind, GRENADE, ULTIMATE,
 } from './config'
 import { SFX, initAudio } from './sound'
 
@@ -61,6 +61,8 @@ export interface GameState {
   board: { score: number; wave: number; date: string }[]
   runCoins: number         // 本場結束獲得的 meta 金幣
   grenades: number         // 手榴彈攜帶數
+  ultCharge: number        // 大絕充能（秒，0~maxCharge）
+  ultActive: boolean       // 大絕（時間緩慢）啟動中
 }
 
 export function createGameState(): GameState {
@@ -70,7 +72,7 @@ export function createGameState(): GameState {
     bestStreak: 0, hitMarker: 0, headshotMarker: 0, damageFlash: 0, message: '', owned: [], current: 'pistol', loadPct: 0,
     floats: [],
     difficulty: 'normal', frenzyT: 0, isBossWave: false, damageDir: 0, damageDirAt: 0,
-    metaCoins: 0, board: [], runCoins: 0, grenades: 0,
+    metaCoins: 0, board: [], runCoins: 0, grenades: 0, ultCharge: 0, ultActive: false,
   }
 }
 
@@ -96,6 +98,7 @@ export class Game {
   private diffReward = 1
   private diffBase = { hp: 1, dmg: 1, spd: 1 }   // 難度基準倍率（波次成長疊乘在上）
   private grenadeCd = 0
+  private killAccum = 0    // 累積擊殺數（達 killsPerStep 充能一次大絕）
   touchMode = false        // 觸控裝置（手機 / ?touch）：不請求指標鎖定，改用虛擬搖桿
 
   constructor(canvas: HTMLCanvasElement, state: GameState) {
@@ -346,6 +349,9 @@ export class Game {
     this.grenades.clear()
     this.grenadeCd = 0
     this.state.grenades = GRENADE.start
+    this.state.ultCharge = 0
+    this.state.ultActive = false
+    this.killAccum = 0
     this.state.floats.length = 0
     this.state.wave = 0
     this.beginWave(1)
@@ -401,6 +407,11 @@ export class Game {
   private onKill(_e: Enemy, isHead: boolean) {
     this.state.kills++
     this.state.streak++
+    // 大絕充能：每殺 killsPerStep 隻 +chargePerStep 秒（上限 maxCharge）
+    if (++this.killAccum >= ULTIMATE.killsPerStep) {
+      this.killAccum = 0
+      this.state.ultCharge = Math.min(ULTIMATE.maxCharge, this.state.ultCharge + ULTIMATE.chargePerStep)
+    }
     this.state.bestStreak = Math.max(this.state.bestStreak, this.state.streak)
     const reward = Math.round((_e.def.reward + (isHead ? ECONOMY.headshotBonus : 0) + this.state.streak * ECONOMY.killBonusStreak) * this.diffReward)
     this.player.money += reward
@@ -440,6 +451,7 @@ export class Game {
 
   private gameOver() {
     this.state.phase = 'dead'
+    this.state.ultActive = false
     this.state.message = ''
     SFX.gameOver()
     this.input.exitLock()
@@ -516,12 +528,21 @@ export class Game {
       if (this.input.justPressed('KeyB')) { this.openBuyMid(); }
       if (this.grenadeCd > 0) this.grenadeCd -= dt
       if (this.input.justPressed('KeyG')) this.tryThrowGrenade()
+      if (this.input.justPressed('KeyF')) this.toggleUltimate()
+      // 大絕時間緩慢：世界用縮放 dt，玩家/武器維持真實 dt（消耗以真實時間計）
+      let slowF = 1
+      if (this.state.ultActive) {
+        this.state.ultCharge = Math.max(0, this.state.ultCharge - dt)
+        if (this.state.ultCharge <= 0) this.endUltimate()
+        else slowF = ULTIMATE.slowFactor
+      }
+      const wdt = dt * slowF
       this.player.update(dt)
       this.weapons.update(dt)
-      this.enemies.update(dt)
-      this.pickups.update(dt)
-      this.grenades.update(dt)
-      this.effects.update(dt)
+      this.enemies.update(wdt)
+      this.pickups.update(wdt)
+      this.grenades.update(wdt)
+      this.effects.update(wdt)
       this.tickWave(dt)
       this.syncStatusHud()
     } else {
@@ -549,6 +570,20 @@ export class Game {
     const origin = cam.position.add(dir.scale(0.8))
     this.grenades.throw(origin, dir)
     SFX.throwGrenade()
+  }
+
+  // ---- 大絕：時間緩慢 ----
+  private toggleUltimate() {
+    if (this.state.ultActive) { this.endUltimate(); return }     // 再按一次可提前結束、保留剩餘充能
+    if (this.state.ultCharge < ULTIMATE.minActivate) return
+    this.state.ultActive = true
+    SFX.ultStart()
+  }
+
+  private endUltimate() {
+    if (!this.state.ultActive) return
+    this.state.ultActive = false
+    SFX.ultEnd()
   }
 
   private tickWave(dt: number) {

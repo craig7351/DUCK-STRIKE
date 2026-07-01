@@ -81,6 +81,7 @@ export class Input {
   setCrouch(on: boolean) { this.touchCrouch = on }
   reloadPress() { this.pressed.add('KeyR') }
   throwGrenade() { this.pressed.add('KeyG') }
+  activateUlt() { this.pressed.add('KeyF') }
   nextWeapon() { this.wheel += 1 }
   selectWeapon(code: string) { this.pressed.add(code) }
 

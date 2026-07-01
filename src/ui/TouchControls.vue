@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
+import type { GameState } from '../game/game'
+import { ULTIMATE } from '../game/config'
 
 // 只需觸控注入方法（避免傳入含 private 成員的 class 造成型別摩擦）
 interface TouchInput {
@@ -11,12 +13,15 @@ interface TouchInput {
   setCrouch(on: boolean): void
   reloadPress(): void
   throwGrenade(): void
+  activateUlt(): void
   nextWeapon(): void
 }
 
-const props = defineProps<{ input: TouchInput }>()
+const props = defineProps<{ input: TouchInput; state: GameState }>()
 
-// ---- 左下虛擬搖桿 ----
+const LOOK_SENS = 1.5
+
+// ---- 左下虛擬搖桿（移動）----
 const stickBase = ref<HTMLElement>()
 const stickX = ref(0), stickY = ref(0)
 let joyId: number | null = null, joyOX = 0, joyOY = 0
@@ -42,9 +47,8 @@ function joyEnd(e: PointerEvent) {
   props.input.setMove(0, 0)
 }
 
-// ---- 看視拖曳（畫面其餘區域）----
+// ---- 空白區拖曳轉視角（不開火，用來純掃視）----
 let lookId: number | null = null, lastX = 0, lastY = 0
-const LOOK_SENS = 1.5
 function lookStart(e: PointerEvent) { if (lookId !== null) return; lookId = e.pointerId; lastX = e.clientX; lastY = e.clientY }
 function lookMove(e: PointerEvent) {
   if (e.pointerId !== lookId) return
@@ -53,26 +57,45 @@ function lookMove(e: PointerEvent) {
 }
 function lookEnd(e: PointerEvent) { if (e.pointerId === lookId) lookId = null }
 
-// ---- 動作按鈕 ----
+// ---- 射擊鈕（兼看視）：按住開火，同一指拖曳即可瞄準 → 單拇指可邊打邊瞄 ----
+let fireId: number | null = null, fLastX = 0, fLastY = 0
+function fireStart(e: PointerEvent) {
+  fireId = e.pointerId
+  fLastX = e.clientX; fLastY = e.clientY
+  ;(e.target as HTMLElement).setPointerCapture(e.pointerId)
+  props.input.setFire(true)
+}
+function fireMove(e: PointerEvent) {
+  if (e.pointerId !== fireId) return
+  props.input.addLook((e.clientX - fLastX) * LOOK_SENS, (e.clientY - fLastY) * LOOK_SENS)
+  fLastX = e.clientX; fLastY = e.clientY
+}
+function fireEnd(e: PointerEvent) {
+  if (e.pointerId !== fireId) return
+  fireId = null
+  props.input.setFire(false)
+}
+
+// ---- 其他動作鈕 ----
 const aimOn = ref(false), crouchOn = ref(false)
-function fire(d: boolean) { props.input.setFire(d) }
 function toggleAim() { aimOn.value = !aimOn.value; props.input.setAim(aimOn.value) }
 function toggleCrouch() { crouchOn.value = !crouchOn.value; props.input.setCrouch(crouchOn.value) }
 function jump() { props.input.queueJump() }
 function reload() { props.input.reloadPress() }
 function grenade() { props.input.throwGrenade() }
+function ult() { props.input.activateUlt() }
 function nextW() { props.input.nextWeapon() }
 </script>
 
 <template>
-  <div class="absolute inset-0 z-20" style="touch-action:none">
-    <!-- 看視層（最底，空白處拖曳轉視角） -->
+  <div class="absolute inset-0 z-20 select-none" style="touch-action:none">
+    <!-- 看視層（最底，空白處拖曳轉視角，不開火） -->
     <div class="absolute inset-0" style="touch-action:none"
       @pointerdown="lookStart" @pointermove="lookMove" @pointerup="lookEnd" @pointercancel="lookEnd"></div>
 
-    <!-- 左下虛擬搖桿 -->
+    <!-- 左下虛擬搖桿（移動） -->
     <div ref="stickBase"
-      class="absolute left-8 bottom-10 rounded-full bg-white/10 border border-white/20"
+      class="absolute left-6 bottom-6 rounded-full bg-white/10 border border-white/20"
       style="width:130px;height:130px;touch-action:none"
       @pointerdown.prevent="joyStart" @pointermove="joyMove" @pointerup="joyEnd" @pointercancel="joyEnd">
       <div class="absolute rounded-full bg-white/35 border border-white/40"
@@ -80,38 +103,56 @@ function nextW() { props.input.nextWeapon() }
         :style="{ transform: `translate(${stickX}px, ${stickY}px)` }"></div>
     </div>
 
-    <!-- 右下：射擊大鈕 -->
-    <button class="absolute rounded-full bg-red-500/40 border-2 border-red-400/70 text-white font-black active:bg-red-500/70 select-none"
-      style="right:30px;bottom:120px;width:96px;height:96px;touch-action:none"
-      @pointerdown.prevent="fire(true)" @pointerup="fire(false)" @pointerleave="fire(false)" @pointercancel="fire(false)">
+    <!-- 右下主鈕：射擊（按住開火 + 拖曳瞄準） -->
+    <button class="absolute rounded-full bg-red-500/40 border-2 border-red-400/70 text-white font-black text-lg active:bg-red-500/70"
+      style="right:24px;bottom:28px;width:96px;height:96px;touch-action:none"
+      @pointerdown.prevent="fireStart" @pointermove="fireMove" @pointerup="fireEnd" @pointercancel="fireEnd">
       射擊
     </button>
 
-    <!-- 右側動作鈕群 -->
-    <button class="absolute rounded-full border-2 text-white font-bold select-none"
-      :class="aimOn ? 'bg-yellow-400/60 border-yellow-300' : 'bg-black/30 border-white/30'"
-      style="right:140px;bottom:150px;width:66px;height:66px;touch-action:none"
+    <!-- 瞄準（切換） -->
+    <button class="absolute rounded-full border-2 text-white text-sm font-bold"
+      :class="aimOn ? 'bg-yellow-400/60 border-yellow-300' : 'bg-black/35 border-white/30'"
+      style="right:132px;bottom:36px;width:64px;height:64px;touch-action:none"
       @pointerdown.prevent="toggleAim">瞄準</button>
 
-    <button class="absolute rounded-full bg-black/30 border-2 border-white/30 text-white font-bold select-none active:bg-white/20"
-      style="right:30px;bottom:230px;width:66px;height:66px;touch-action:none"
+    <!-- 跳 -->
+    <button class="absolute rounded-full bg-black/35 border-2 border-white/30 text-white text-sm font-bold active:bg-white/20"
+      style="right:36px;bottom:134px;width:60px;height:60px;touch-action:none"
       @pointerdown.prevent="jump">跳</button>
 
-    <button class="absolute rounded-full border-2 text-white font-bold select-none"
-      :class="crouchOn ? 'bg-cyan-400/50 border-cyan-300' : 'bg-black/30 border-white/30'"
-      style="right:140px;bottom:70px;width:60px;height:60px;touch-action:none"
+    <!-- 蹲（切換） -->
+    <button class="absolute rounded-full border-2 text-white text-sm font-bold"
+      :class="crouchOn ? 'bg-cyan-400/50 border-cyan-300' : 'bg-black/35 border-white/30'"
+      style="right:140px;bottom:116px;width:56px;height:56px;touch-action:none"
       @pointerdown.prevent="toggleCrouch">蹲</button>
 
-    <button class="absolute rounded-full bg-black/30 border-2 border-white/30 text-white text-sm font-bold select-none active:bg-white/20"
-      style="right:215px;bottom:90px;width:60px;height:60px;touch-action:none"
+    <!-- 換彈 -->
+    <button class="absolute rounded-full bg-black/35 border-2 border-white/30 text-white text-xs font-bold active:bg-white/20"
+      style="right:212px;bottom:40px;width:56px;height:56px;touch-action:none"
       @pointerdown.prevent="reload">換彈</button>
 
-    <button class="absolute rounded-full bg-black/30 border-2 border-white/30 text-white text-sm font-bold select-none active:bg-white/20"
-      style="right:215px;bottom:165px;width:60px;height:60px;touch-action:none"
+    <!-- 切槍 -->
+    <button class="absolute rounded-full bg-black/35 border-2 border-white/30 text-white text-xs font-bold active:bg-white/20"
+      style="right:212px;bottom:110px;width:56px;height:56px;touch-action:none"
       @pointerdown.prevent="nextW">切槍</button>
 
-    <button class="absolute rounded-full bg-orange-500/30 border-2 border-orange-400/60 text-white text-2xl font-bold select-none active:bg-orange-500/60"
-      style="right:120px;bottom:235px;width:60px;height:60px;touch-action:none"
-      @pointerdown.prevent="grenade">💣</button>
+    <!-- 手榴彈（顯示剩餘數） -->
+    <button class="absolute rounded-full border-2 flex flex-col items-center justify-center leading-none active:scale-95"
+      :class="state.grenades > 0 ? 'bg-orange-500/35 border-orange-400/70 text-white' : 'bg-black/30 border-white/15 text-white/30'"
+      style="right:132px;bottom:188px;width:58px;height:58px;touch-action:none"
+      @pointerdown.prevent="grenade">
+      <span class="text-xl">💣</span><span class="text-[11px] font-bold tabular-nums">{{ state.grenades }}</span>
+    </button>
+
+    <!-- 大絕：時間緩慢（顯示充能秒數，就緒/啟動高亮） -->
+    <button class="absolute rounded-full border-2 flex flex-col items-center justify-center leading-none active:scale-95"
+      :class="state.ultActive ? 'bg-cyan-300/60 border-cyan-200 text-white animate-pulse'
+        : state.ultCharge >= ULTIMATE.minActivate ? 'bg-sky-500/45 border-sky-300 text-white'
+        : 'bg-black/30 border-white/15 text-white/40'"
+      style="right:36px;bottom:206px;width:58px;height:58px;touch-action:none"
+      @pointerdown.prevent="ult">
+      <span class="text-lg">⏳</span><span class="text-[11px] font-bold tabular-nums">{{ state.ultCharge.toFixed(0) }}s</span>
+    </button>
   </div>
 </template>

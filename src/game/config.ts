@@ -194,6 +194,15 @@ export const KILLSTREAK = {
   supply: 15,     // 連殺 15 → 補滿彈藥
 }
 
+// 大絕：時間緩慢（子彈時間）。靠擊殺充能，啟動時世界變慢、玩家照常。
+export const ULTIMATE = {
+  slowFactor: 0.3,      // 世界時間縮放（敵人/敵彈/掉落/特效）
+  maxCharge: 10,        // 充能上限（秒）
+  killsPerStep: 5,      // 每殺幾隻充能一次
+  chargePerStep: 1,     // 每次充能秒數
+  minActivate: 0.3,     // 至少要有這麼多秒才能啟動
+}
+
 export const THEME = {
   title: 'DUCK STRIKE',
   subtitle: '鴨鴨突擊',

@@ -82,4 +82,6 @@ export const SFX = {
   gameOver() { [440, 392, 330, 262].forEach((f, i) => setTimeout(() => tone(f, 0.4, 'sawtooth', 0.22, f * 0.8), i * 260)) },
   explode() { noise(0.4, 0.5, 800); tone(80, 0.4, 'sawtooth', 0.3, 40) },
   throwGrenade() { noise(0.16, 0.18, 1200, 'bandpass'); tone(420, 0.12, 'triangle', 0.1, 180) },
+  ultStart() { tone(560, 0.6, 'sine', 0.28, 120); noise(0.35, 0.14, 500) },   // 下沉嗡鳴＝時間慢下來
+  ultEnd() { tone(180, 0.4, 'sine', 0.22, 520) },                              // 上揚＝恢復
 }

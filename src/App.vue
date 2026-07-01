@@ -108,6 +108,7 @@ function resume() { game?.resume() }
           <div>🔫 <b class="text-white/90">戰鬥</b>：左鍵射擊、右鍵瞄準、G 丟手榴彈，可射爆場上爆炸桶連鎖。</div>
           <div>🛒 <b class="text-white/90">軍火庫</b>：波間按 B 買槍 / 補彈 / 護甲。</div>
           <div>🔥 <b class="text-white/90">連殺獎勵</b>：5 連回血、10 連狂暴、15 連補滿彈藥。</div>
+          <div>⏳ <b class="text-white/90">大絕 (F)</b>：時間緩慢；每殺 5 隻 +1 秒、最多存 10 秒。</div>
           <div>💊 <b class="text-white/90">掉落</b>：補血 / 彈藥 / 限時狂暴，走過自動拾取。</div>
           <div>👾 <b class="text-white/90">敵種</b>：雜兵(遠程)、突擊兵(衝刺)、刀兵(衝鋒砍擊)、重裝兵(厚血)、自爆兵(貼身爆炸)。</div>
           <div>★ <b class="text-white/90">永久升級</b>：用星幣解鎖跨場永久強化。</div>
@@ -128,7 +129,7 @@ function resume() { game?.resume() }
   <HUD v-if="['playing','paused'].includes(state.phase)" :state="state" :now="now" />
 
   <!-- 手機觸控操作（搖桿 + 按鈕）：僅手機 + 遊玩中顯示 -->
-  <TouchControls v-if="isMobile && state.phase === 'playing' && inputRef" :input="inputRef" />
+  <TouchControls v-if="isMobile && state.phase === 'playing' && inputRef" :input="inputRef" :state="state" />
 
   <!-- 購買選單 -->
   <BuyMenu v-if="state.phase === 'buy'" :state="state" @buy="buy" @armor="buyArmor" @next="nextWave" />

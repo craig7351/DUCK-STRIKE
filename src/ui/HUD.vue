@@ -1,9 +1,12 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { GameState } from '../game/game'
-import { WEAPONS } from '../game/config'
+import { WEAPONS, ULTIMATE } from '../game/config'
 
 const props = defineProps<{ state: GameState; now: number }>()
+
+const ultPct = computed(() => Math.min(1, props.state.ultCharge / ULTIMATE.maxCharge))
+const ultReady = computed(() => props.state.ultCharge >= ULTIMATE.minActivate)
 
 const showHit = computed(() => props.now - props.state.hitMarker < 140)
 const showHead = computed(() => props.now - props.state.headshotMarker < 220)
@@ -60,6 +63,13 @@ function floatStyle(f: any) {
     boxShadow: `inset 0 0 220px 40px rgba(200,0,0,${dmgAlpha})`,
     opacity: dmgAlpha > 0 ? 1 : 0, transition: 'opacity .1s' }" />
 
+  <!-- 大絕：時間緩慢 畫面藍色調 + 暗角 -->
+  <div v-if="state.ultActive" class="absolute inset-0 pointer-events-none"
+    style="box-shadow: inset 0 0 320px 70px rgba(40,120,255,0.4); background: rgba(70,140,255,0.07)"></div>
+  <div v-if="state.ultActive" class="absolute top-28 left-1/2 -translate-x-1/2 text-cyan-200 font-black text-2xl tracking-widest animate-pulse pointer-events-none hud-text">
+    ⏳ 時間緩慢 {{ state.ultCharge.toFixed(1) }}s
+  </div>
+
   <!-- 準心 -->
   <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
     <div class="relative" :style="{ transform: aim ? 'scale(0.6)' : 'scale(1)', transition: 'transform .1s' }">
@@ -98,6 +108,19 @@ function floatStyle(f: any) {
         <div class="text-3xl font-bold tabular-nums" :class="state.grenades > 0 ? 'text-orange-300' : 'text-white/30'">💣 {{ state.grenades }}</div>
         <div class="text-xs tracking-widest text-white/60">GRENADE · G</div>
       </div>
+    </div>
+  </div>
+
+  <!-- 大絕充能條（F） -->
+  <div class="absolute left-6 bottom-32 pointer-events-none hud-text" style="width:170px">
+    <div class="flex justify-between text-[10px] tracking-widest mb-1"
+      :class="ultReady ? 'text-cyan-300' : 'text-white/50'">
+      <span>⏳ 大絕 · F {{ ultReady ? '就緒' : '' }}</span><span class="tabular-nums">{{ state.ultCharge.toFixed(1) }}s</span>
+    </div>
+    <div class="h-2 rounded-full bg-white/10 overflow-hidden">
+      <div class="h-full transition-all"
+        :class="state.ultActive ? 'bg-cyan-300 animate-pulse' : ultReady ? 'bg-sky-400' : 'bg-sky-600/50'"
+        :style="{ width: (ultPct * 100) + '%' }"></div>
     </div>
   </div>
 
@@ -156,6 +179,6 @@ function floatStyle(f: any) {
 
   <!-- 提示列 -->
   <div class="absolute bottom-2 left-1/2 -translate-x-1/2 text-[11px] text-white/40 pointer-events-none">
-    WASD 移動 · 滑鼠 瞄準 · 左鍵 射擊 · 右鍵 瞄準 · R 換彈 · G 手榴彈 · 1-5 換槍 · Shift 跑 · Ctrl 蹲 · B 購買
+    WASD 移動 · 滑鼠 瞄準 · 左鍵 射擊 · 右鍵 瞄準 · R 換彈 · G 手榴彈 · F 大絕 · 1-5 換槍 · Shift 跑 · Ctrl 蹲 · B 購買
   </div>
 </template>
