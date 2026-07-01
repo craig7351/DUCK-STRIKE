@@ -61,6 +61,7 @@ function backToMenu() { refreshMeta(); menuScreen.value = 'home'; state.phase = 
 function closeUpgrades() { showUpgrades.value = false; refreshMeta() }
 function buy(id: WeaponId) { game?.buy(id) }
 function buyArmor() { game?.buyArmor() }
+function buyMedkit() { game?.buyMedkit() }
 function nextWave() { game?.nextWave() }
 function resume() { game?.resume() }
 </script>
@@ -98,7 +99,7 @@ function resume() { game?.resume() }
   <TouchControls v-if="isMobile && state.phase === 'playing' && inputRef" :input="inputRef" :state="state" />
 
   <!-- 購買選單 -->
-  <BuyMenu v-if="state.phase === 'buy'" :state="state" @buy="buy" @armor="buyArmor" @next="nextWave" />
+  <BuyMenu v-if="state.phase === 'buy'" :state="state" @buy="buy" @armor="buyArmor" @medkit="buyMedkit" @next="nextWave" />
 
   <!-- 暫停 -->
   <div v-if="state.phase === 'paused'" class="absolute inset-0 flex flex-col items-center justify-center bg-black/60 backdrop-blur-sm z-30">

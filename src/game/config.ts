@@ -18,9 +18,9 @@ export const PLAYER = {
   maxHp: 100,
   startArmor: 0,
   mouseSensitivity: 0.0022,
-  // 受擊後回血
+  // 受擊後回血（慢速）：最後一次受擊過 regenDelay 秒後，每秒回 regenRate
   regenDelay: 5,        // 秒，最後一次受擊後
-  regenRate: 8,         // hp/秒
+  regenRate: 3,         // hp/秒（慢速回血）
 }
 
 export type WeaponId = 'knife' | 'pistol' | 'smg' | 'ak' | 'shotgun' | 'sniper'
@@ -59,31 +59,31 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
   },
   pistol: {
     id: 'pistol', name: '手槍', model: 'pistol',
-    damage: 28, rpm: 360, auto: false, magSize: 12, reserve: 600, reloadTime: 0.3,
+    damage: 28, rpm: 360, auto: false, magSize: 12, reserve: 96, reloadTime: 0.3,
     spreadHip: 0.022, spreadAim: 0.006, pellets: 1, range: 80, recoil: 0.012, headMult: 3.2, price: 0,
     vm: { pos: [0.16, -0.17, 0.34], rot: [0, -Math.PI / 2, 0], scale: 0.85, muzzle: [0, 0, 0] },
   },
   smg: {
     id: 'smg', name: '衝鋒槍', model: 'smg',
-    damage: 22, rpm: 750, auto: true, magSize: 30, reserve: 1200, reloadTime: 0.44,
+    damage: 22, rpm: 750, auto: true, magSize: 30, reserve: 210, reloadTime: 0.44,
     spreadHip: 0.04, spreadAim: 0.013, pellets: 1, range: 90, recoil: 0.009, headMult: 2.6, price: 1200,
     vm: { pos: [0.16, -0.18, 0.36], rot: [0, -Math.PI / 2, 0], scale: 1.0, muzzle: [0, 0, 0] },
   },
   ak: {
     id: 'ak', name: '突擊步槍', model: 'ak',
-    damage: 38, rpm: 600, auto: true, magSize: 30, reserve: 900, reloadTime: 0.5,
+    damage: 38, rpm: 600, auto: true, magSize: 30, reserve: 180, reloadTime: 0.5,
     spreadHip: 0.05, spreadAim: 0.009, pellets: 1, range: 120, recoil: 0.018, headMult: 3.5, price: 2700,
     vm: { pos: [0.17, -0.18, 0.36], rot: [0, -Math.PI / 2, 0], scale: 1.15, muzzle: [0, 0, 0] },
   },
   shotgun: {
     id: 'shotgun', name: '霰彈槍', model: 'shotgun',
-    damage: 13, rpm: 90, auto: false, magSize: 8, reserve: 320, reloadTime: 0.12, // 逐發裝填(簡化)
-    spreadHip: 0.10, spreadAim: 0.07, pellets: 9, range: 35, recoil: 0.04, headMult: 1.6, price: 2000,
+    damage: 22, rpm: 105, auto: false, magSize: 8, reserve: 64, reloadTime: 0.12, // 逐發裝填(簡化)
+    spreadHip: 0.075, spreadAim: 0.045, pellets: 10, range: 42, recoil: 0.045, headMult: 1.8, price: 2000,
     vm: { pos: [0.17, -0.18, 0.36], rot: [0, -Math.PI / 2, 0], scale: 1.1, muzzle: [0, 0, 0] },
   },
   sniper: {
     id: 'sniper', name: '狙擊槍', model: 'sniper',
-    damage: 115, rpm: 48, auto: false, magSize: 5, reserve: 250, reloadTime: 0.6,
+    damage: 115, rpm: 48, auto: false, magSize: 5, reserve: 35, reloadTime: 0.6,
     spreadHip: 0.12, spreadAim: 0.0008, pellets: 1, range: 200, recoil: 0.05, headMult: 1.8, scope: 22, price: 4750,
     vm: { pos: [0.17, -0.18, 0.38], rot: [0, -Math.PI / 2, 0], scale: 1.25, muzzle: [0, 0, 0] },
   },
@@ -112,19 +112,22 @@ export interface EnemyDef {
 }
 
 export const ENEMIES: Record<EnemyId, EnemyDef> = {
-  grunt:  { id: 'grunt',  name: '雜兵',   model: 'enemy',  hp: 100, speed: 3.2, damage: 8,  rpm: 90,  range: 32, accuracy: 0.35, reward: 300, scale: 1.0 },
-  rusher: { id: 'rusher', name: '突擊兵', model: 'enemy',  hp: 70,  speed: 5.4, damage: 14, rpm: 50,  range: 6,  accuracy: 0.6,  reward: 350, scale: 0.92 },
-  hazmat: { id: 'hazmat', name: '重裝兵', model: 'hazmat', hp: 240, speed: 2.4, damage: 16, rpm: 70,  range: 28, accuracy: 0.45, reward: 600, scale: 1.05 },
-  bomber: { id: 'bomber', name: '自爆兵', model: 'enemy',  hp: 55,  speed: 6.2, damage: 0,  rpm: 1,   range: 2.6, accuracy: 1, reward: 450, scale: 0.95, suicide: true, explodeRadius: 4.5, explodeDmg: 55, tint: [1, 0.35, 0.1] },
-  slasher:{ id: 'slasher',name: '刀兵',   model: 'soldier',hp: 95,  speed: 7.0, damage: 20, rpm: 70,  range: 2.4, accuracy: 1, reward: 420, scale: 1.0, melee: true },
-  boss:   { id: 'boss',   name: '王',     model: 'hazmat', hp: 1600, speed: 2.7, damage: 24, rpm: 90, range: 34, accuracy: 0.55, reward: 3500, scale: 2.3, boss: true, tint: [0.7, 0.1, 0.7] },
+  grunt:  { id: 'grunt',  name: '雜兵',   model: 'enemy',  hp: 100, speed: 3.2, damage: 8,  rpm: 90,  range: 32, accuracy: 0.35, reward: 150, scale: 1.0 },
+  rusher: { id: 'rusher', name: '突擊兵', model: 'enemy',  hp: 70,  speed: 5.4, damage: 14, rpm: 50,  range: 6,  accuracy: 0.6,  reward: 180, scale: 0.92 },
+  hazmat: { id: 'hazmat', name: '重裝兵', model: 'hazmat', hp: 240, speed: 2.4, damage: 16, rpm: 70,  range: 28, accuracy: 0.45, reward: 300, scale: 1.05 },
+  bomber: { id: 'bomber', name: '自爆兵', model: 'enemy',  hp: 55,  speed: 6.2, damage: 0,  rpm: 1,   range: 2.6, accuracy: 1, reward: 220, scale: 0.95, suicide: true, explodeRadius: 4.5, explodeDmg: 55, tint: [1, 0.35, 0.1] },
+  slasher:{ id: 'slasher',name: '刀兵',   model: 'soldier',hp: 95,  speed: 7.0, damage: 20, rpm: 70,  range: 2.4, accuracy: 1, reward: 210, scale: 1.0, melee: true },
+  boss:   { id: 'boss',   name: '王',     model: 'hazmat', hp: 1600, speed: 2.7, damage: 24, rpm: 90, range: 34, accuracy: 0.55, reward: 2000, scale: 2.3, boss: true, tint: [0.7, 0.1, 0.7] },
 }
+
+// 補血包（軍火庫購買，每次進軍火庫限購 1 個）
+export const MEDKIT = { price: 500, heal: 50 }
 
 export const ECONOMY = {
   startMoney: 800,
-  killBonusStreak: 50,    // 連殺額外
-  roundReward: 600,
-  headshotBonus: 100,
+  killBonusStreak: 20,    // 連殺額外
+  roundReward: 300,
+  headshotBonus: 50,
 }
 
 // 波次設定：每波敵人數與組成隨波遞增；每 5 波為王波

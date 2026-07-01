@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { GameState } from '../game/game'
-import { WEAPONS, WeaponId } from '../game/config'
+import { WEAPONS, WeaponId, MEDKIT } from '../game/config'
 
 const props = defineProps<{ state: GameState }>()
-const emit = defineEmits<{ (e: 'buy', id: WeaponId): void; (e: 'armor'): void; (e: 'next'): void }>()
+const emit = defineEmits<{ (e: 'buy', id: WeaponId): void; (e: 'armor'): void; (e: 'medkit'): void; (e: 'next'): void }>()
+
+const canMedkit = computed(() => !props.state.medkitBought && props.state.hp < props.state.maxHp && props.state.money >= MEDKIT.price)
 
 const buyables: WeaponId[] = ['pistol', 'smg', 'ak', 'shotgun', 'sniper']
 const items = computed(() =>
@@ -66,6 +68,15 @@ const armorCost = 650
             <span class="font-black text-sky-300">{{ state.armor >= 100 ? '已滿' : '$' + armorCost }}</span>
           </div>
           <div class="text-[11px] text-white/50 mt-1">吸收 50% 傷害</div>
+        </button>
+        <button @click="emit('medkit')" :disabled="!canMedkit"
+          class="flex-1 p-3 rounded-xl border border-green-500/40 bg-green-900/20 text-left transition"
+          :class="canMedkit ? 'hover:border-green-400 hover:bg-green-400/10 cursor-pointer' : 'opacity-50 cursor-not-allowed'">
+          <div class="flex justify-between">
+            <span class="font-bold text-green-200">補血包</span>
+            <span class="font-black text-green-300">{{ state.medkitBought ? '已購買' : state.hp >= state.maxHp ? '已滿血' : '$' + MEDKIT.price }}</span>
+          </div>
+          <div class="text-[11px] text-white/50 mt-1">回復 {{ MEDKIT.heal }} HP（每次限 1 個）</div>
         </button>
         <button @click="emit('next')"
           class="flex-1 p-4 rounded-xl bg-yellow-400 text-black font-black text-lg hover:bg-yellow-300 transition cursor-pointer">

@@ -17,7 +17,7 @@ import { GrenadeManager } from './grenades'
 import { Meta } from './meta'
 import {
   WEAPONS, WeaponId, ENEMIES, EnemyId, waveSpec, ECONOMY, PLAYER,
-  DIFFICULTIES, Difficulty, DROP, KILLSTREAK, PickupKind, GRENADE, ULTIMATE,
+  DIFFICULTIES, Difficulty, DROP, KILLSTREAK, PickupKind, GRENADE, ULTIMATE, MEDKIT,
 } from './config'
 import { SFX, initAudio } from './sound'
 
@@ -31,6 +31,7 @@ export interface FloatText {
 export interface GameState {
   phase: Phase
   hp: number
+  maxHp: number
   armor: number
   money: number
   weaponName: string
@@ -63,16 +64,17 @@ export interface GameState {
   grenades: number         // 手榴彈攜帶數
   ultCharge: number        // 大絕充能（秒，0~maxCharge）
   ultActive: boolean       // 大絕（時間緩慢）啟動中
+  medkitBought: boolean    // 本次進軍火庫是否已買補血包（每次限 1）
 }
 
 export function createGameState(): GameState {
   return {
-    phase: 'loading', hp: 100, armor: 0, money: 0, weaponName: '', ammoMag: 0, ammoReserve: 0,
+    phase: 'loading', hp: 100, maxHp: 100, armor: 0, money: 0, weaponName: '', ammoMag: 0, ammoReserve: 0,
     reloading: false, aiming: false, wave: 0, enemiesLeft: 0, kills: 0, score: 0, streak: 0,
     bestStreak: 0, hitMarker: 0, headshotMarker: 0, damageFlash: 0, message: '', owned: [], current: 'pistol', loadPct: 0,
     floats: [],
     difficulty: 'normal', frenzyT: 0, isBossWave: false, damageDir: 0, damageDirAt: 0,
-    metaCoins: 0, board: [], runCoins: 0, grenades: 0, ultCharge: 0, ultActive: false,
+    metaCoins: 0, board: [], runCoins: 0, grenades: 0, ultCharge: 0, ultActive: false, medkitBought: false,
   }
 }
 
@@ -338,7 +340,9 @@ export class Game {
     this.player.armor = b.armor
     this.player.money = ECONOMY.startMoney + b.startMoney
     this.state.money = this.player.money
+    this.state.maxHp = this.player.maxHp
     this.state.armor = Math.round(this.player.armor)
+    this.state.medkitBought = false
     this.state.kills = 0; this.state.score = 0; this.state.streak = 0; this.state.bestStreak = 0
     this.state.runCoins = 0
     this.weapons.owned = ['knife', 'pistol']
@@ -490,6 +494,18 @@ export class Game {
     return true
   }
 
+  // 補血包：回 MEDKIT.heal，每次進軍火庫限購 1 個
+  buyMedkit(): boolean {
+    if (this.state.medkitBought || this.player.hp >= this.player.maxHp || this.player.money < MEDKIT.price) return false
+    this.player.money -= MEDKIT.price
+    this.player.heal(MEDKIT.heal)
+    this.state.medkitBought = true
+    this.state.money = this.player.money
+    this.state.hp = Math.round(this.player.hp)
+    SFX.buy()
+    return true
+  }
+
   nextWave() {
     if (this.state.phase !== 'buy') return
     this.beginWave(this.state.wave + 1)
@@ -598,6 +614,7 @@ export class Game {
       this.player.money += ECONOMY.roundReward
       this.state.money = this.player.money
       this.state.message = ''
+      this.state.medkitBought = false   // 每次進軍火庫可再買一個補血包
       this.state.phase = 'buy'
       this.input.exitLock()
       SFX.waveClear()
