@@ -1,8 +1,11 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { Music, MUSIC_TRACKS } from '../game/music'
 
-const sel = ref(-1)
+const DEFAULT_TRACK = 3   // 電子（0緊張 1輕快 2史詩 3電子 4安靜）
+const sel = ref(DEFAULT_TRACK)
+onMounted(() => { Music.start(DEFAULT_TRACK) })   // 預設開啟電子（音訊於首次互動時解鎖）
+
 function pick(i: number) {
   if (sel.value === i) { sel.value = -1; Music.stop() }
   else { sel.value = i; Music.start(i) }

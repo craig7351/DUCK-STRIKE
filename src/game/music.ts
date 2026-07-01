@@ -116,6 +116,7 @@ function scheduleStep(globalStep: number, t: number) {
 // 前瞻排程：每 25ms 把未來 0.1s 內的步進排上時間軸，確保穩定不卡頓
 function loop() {
   const c = ctx!
+  if (c.state !== 'running') { nextTime = c.currentTime + 0.06; return }   // 音訊尚未解鎖（等使用者互動）→ 待命
   while (nextTime < c.currentTime + 0.1) {
     scheduleStep(gstep, nextTime)
     nextTime += 60 / current!.bpm / 4
@@ -131,6 +132,16 @@ export const Music = {
   start(i: number) {
     const c = getCtx()
     ctx = c
+    // 瀏覽器自動播放政策：context 未解鎖時，掛一次性監聽在首次互動時 resume
+    if (c.state === 'suspended') {
+      const resume = () => {
+        void c.resume()
+        window.removeEventListener('pointerdown', resume)
+        window.removeEventListener('keydown', resume)
+      }
+      window.addEventListener('pointerdown', resume)
+      window.addEventListener('keydown', resume)
+    }
     if (!bus) { bus = c.createGain(); bus.gain.value = 0.3; bus.connect(c.destination) }
     stopScheduler()
     current = MUSIC_TRACKS[i]

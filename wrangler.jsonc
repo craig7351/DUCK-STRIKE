@@ -1,0 +1,14 @@
+{
+  // Cloudflare Pages + D1 設定。部署前先建資料庫並把 database_id 填進來：
+  //   wrangler d1 create duck-strike-db   → 複製回傳的 database_id 貼到下方
+  "name": "duck-strike",
+  "compatibility_date": "2025-01-01",
+  "pages_build_output_dir": "./dist",
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "duck-strike-db",
+      "database_id": "REPLACE_WITH_ID_FROM_wrangler_d1_create"
+    }
+  ]
+}

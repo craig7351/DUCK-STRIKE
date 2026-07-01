@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, reactive, ref } from 'vue'
+import { onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { Game, createGameState } from './game/game'
 import type { WeaponId, Difficulty } from './game/config'
 import { THEME, DIFFICULTIES } from './game/config'
@@ -9,6 +9,10 @@ import BuyMenu from './ui/BuyMenu.vue'
 import UpgradeMenu from './ui/UpgradeMenu.vue'
 import TouchControls from './ui/TouchControls.vue'
 import MusicMenu from './ui/MusicMenu.vue'
+import Landing from './ui/Landing.vue'
+import Leaderboard from './ui/Leaderboard.vue'
+import MessageBoard from './ui/MessageBoard.vue'
+import { getPlayerName, submitScore, sendHeartbeat } from './game/api'
 import type { Input } from './game/input'
 
 const canvas = ref<HTMLCanvasElement>()
@@ -19,16 +23,15 @@ let raf = 0
 
 const bestScore = ref(0)
 const metaCoins = ref(0)
-const board = ref<{ score: number; wave: number; date: string }[]>([])
 const selectedDiff = ref<Difficulty>('normal')
 const showUpgrades = ref(false)
+const menuScreen = ref<'home' | 'leaderboard' | 'messages'>('home')
 const inputRef = ref<Input | null>(null)
 const isMobile = ref(
   matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window || new URLSearchParams(location.search).has('touch'),
 )
-const diffs = Object.entries(DIFFICULTIES).map(([id, d]) => ({ id: id as Difficulty, name: d.name }))
 
-function refreshMeta() { bestScore.value = Meta.best; metaCoins.value = Meta.coins; board.value = [...Meta.board] }
+function refreshMeta() { bestScore.value = Meta.best; metaCoins.value = Meta.coins }
 function tick() { now.value = performance.now(); raf = requestAnimationFrame(tick) }
 
 onMounted(async () => {
@@ -39,11 +42,22 @@ onMounted(async () => {
   refreshMeta()
   tick()
 })
-onUnmounted(() => { cancelAnimationFrame(raf); game?.dispose() })
 
-function start() { game?.start(selectedDiff.value) }
+// 分數提交（死亡時）+ 在線心跳（遊玩中每 60s）
+let hbTimer = 0
+watch(() => state.phase, (p, prev) => {
+  if (p === 'dead' && prev !== 'dead') {
+    submitScore({ name: getPlayerName() || '鴨鴨', score: state.score, wave: state.wave, kills: state.kills, difficulty: state.difficulty })
+  }
+  if (p === 'playing' && !hbTimer) { sendHeartbeat(); hbTimer = window.setInterval(sendHeartbeat, 60000) }
+  else if (p !== 'playing' && hbTimer) { clearInterval(hbTimer); hbTimer = 0 }
+})
+
+onUnmounted(() => { cancelAnimationFrame(raf); if (hbTimer) clearInterval(hbTimer); game?.dispose() })
+
+function start(diff: Difficulty) { selectedDiff.value = diff; game?.start(diff) }
 function restart() { game?.start(selectedDiff.value) }
-function backToMenu() { refreshMeta(); state.phase = 'menu' }
+function backToMenu() { refreshMeta(); menuScreen.value = 'home'; state.phase = 'menu' }
 function closeUpgrades() { showUpgrades.value = false; refreshMeta() }
 function buy(id: WeaponId) { game?.buy(id) }
 function buyArmor() { game?.buyArmor() }
@@ -66,66 +80,13 @@ function resume() { game?.resume() }
     <div class="text-white/40 text-sm mt-3">載入中… {{ state.loadPct }}%</div>
   </div>
 
-  <!-- 主選單 -->
-  <div v-else-if="state.phase === 'menu'" class="absolute inset-0 flex flex-col items-center justify-center bg-black/70 backdrop-blur-sm z-40">
-    <div class="text-center">
-      <h1 class="text-7xl font-black text-yellow-400 tracking-tighter drop-shadow-2xl">{{ THEME.title }}</h1>
-      <p class="text-2xl text-white/80 font-bold tracking-[0.3em] mt-1">{{ THEME.subtitle }}</p>
-
-      <!-- 難度選擇 -->
-      <div class="mt-6">
-        <div class="text-xs text-white/40 tracking-widest mb-2">難度</div>
-        <div class="flex gap-2 justify-center">
-          <button v-for="d in diffs" :key="d.id" @click="selectedDiff = d.id"
-            class="px-4 py-2 rounded-lg font-bold text-sm transition cursor-pointer"
-            :class="selectedDiff === d.id ? 'bg-yellow-400 text-black' : 'bg-white/10 text-white/70 hover:bg-white/20'">
-            {{ d.name }}
-          </button>
-        </div>
-      </div>
-
-      <div class="flex gap-3 justify-center mt-6">
-        <button @click="start" class="px-10 py-4 bg-yellow-400 text-black font-black text-2xl rounded-xl hover:bg-yellow-300 hover:scale-105 transition cursor-pointer">
-          開始遊戲 ▶
-        </button>
-        <button @click="showUpgrades = true" class="px-6 py-4 bg-cyan-500/20 border border-cyan-400/40 text-cyan-200 font-bold rounded-xl hover:bg-cyan-500/30 transition cursor-pointer">
-          永久升級<br><span class="text-xs text-cyan-300">★ {{ metaCoins }}</span>
-        </button>
-      </div>
-
-      <div class="flex items-center justify-center gap-8 mt-5">
-        <div v-if="bestScore > 0" class="text-white/60">最高分 <b class="text-yellow-400">{{ bestScore }}</b></div>
-        <div v-if="board.length" class="text-left text-xs text-white/50">
-          <div class="text-white/40 tracking-widest mb-1">排行榜</div>
-          <div v-for="(b, i) in board.slice(0, 5)" :key="i" class="tabular-nums">
-            {{ i + 1 }}. <b class="text-yellow-400">{{ b.score }}</b> · 第{{ b.wave }}波 · {{ b.date }}
-          </div>
-        </div>
-      </div>
-
-      <!-- 玩法說明 -->
-      <div class="mt-6 mx-auto max-w-2xl text-left bg-white/5 border border-white/10 rounded-xl px-5 py-4">
-        <div class="text-yellow-400 font-bold text-sm tracking-widest mb-2">玩法說明</div>
-        <div class="grid grid-cols-2 gap-x-6 gap-y-1.5 text-xs text-white/70 leading-relaxed">
-          <div>🎯 <b class="text-white/90">無盡波次生存</b>：撐越久波數越高分越高；敵人越後面越多、越強。</div>
-          <div>👑 <b class="text-white/90">每 5 波王波</b>：擊敗放大的紫色王，必掉補給。</div>
-          <div>🔫 <b class="text-white/90">戰鬥</b>：左鍵射擊、右鍵瞄準、G 丟手榴彈，可射爆場上爆炸桶連鎖。</div>
-          <div>🛒 <b class="text-white/90">軍火庫</b>：每波清空後自動開啟，買槍 / 補彈 / 護甲。</div>
-          <div>🔥 <b class="text-white/90">連殺獎勵</b>：5 連回血、10 連狂暴、15 連補滿彈藥。</div>
-          <div>⏳ <b class="text-white/90">大絕 (F)</b>：時間緩慢；每殺 5 隻 +1 秒、最多存 10 秒。</div>
-          <div>💊 <b class="text-white/90">掉落</b>：補血 / 彈藥 / 限時狂暴，走過自動拾取。</div>
-          <div>👾 <b class="text-white/90">敵種</b>：雜兵(遠程)、突擊兵(衝刺)、刀兵(衝鋒砍擊)、重裝兵(厚血)、自爆兵(貼身爆炸)。</div>
-          <div>★ <b class="text-white/90">永久升級</b>：用星幣解鎖跨場永久強化。</div>
-        </div>
-      </div>
-
-      <div class="mt-6 text-xs text-white/40 leading-relaxed">
-        WASD 移動 · 滑鼠 瞄準 · 左鍵 射擊 · 右鍵 瞄準/開鏡<br>
-        R 換彈 · G 手榴彈 · F 大絕 · 1-5 換槍 · Q 軍刀 · Shift 跑 · Ctrl/C 蹲 · Esc 暫停<br>
-        <span class="text-white/30">購買軍火只在每波之間（波次清空後自動開啟軍火庫）</span>
-      </div>
-    </div>
-  </div>
+  <!-- 主選單（首頁 / 排行榜 / 留言板） -->
+  <template v-else-if="state.phase === 'menu'">
+    <Landing v-if="menuScreen === 'home'" :best-score="bestScore" :meta-coins="metaCoins"
+      @start="start" @leaderboard="menuScreen = 'leaderboard'" @messages="menuScreen = 'messages'" @upgrades="showUpgrades = true" />
+    <Leaderboard v-else-if="menuScreen === 'leaderboard'" @back="menuScreen = 'home'" />
+    <MessageBoard v-else-if="menuScreen === 'messages'" @back="menuScreen = 'home'" />
+  </template>
 
   <!-- 永久升級面板 -->
   <UpgradeMenu v-if="showUpgrades" @close="closeUpgrades" />
