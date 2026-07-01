@@ -99,7 +99,7 @@ function nextW() { props.input.nextWeapon() }
       style="width:130px;height:130px;touch-action:none"
       @pointerdown.prevent="joyStart" @pointermove="joyMove" @pointerup="joyEnd" @pointercancel="joyEnd">
       <div class="absolute rounded-full bg-white/35 border border-white/40"
-        style="width:60px;height:60px;left:35px;top:35px"
+        style="width:60px;height:60px;left:35px;top:35px;touch-action:none"
         :style="{ transform: `translate(${stickX}px, ${stickY}px)` }"></div>
     </div>
 

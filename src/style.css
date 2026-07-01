@@ -16,6 +16,7 @@ html, body, #app {
   color: #fff;
   user-select: none;
   -webkit-user-select: none;
+  touch-action: manipulation;   /* 停用「連點兩下放大」（保留捲動/縮放手勢），沿祖先鏈生效 */
 }
 
 #renderCanvas {
