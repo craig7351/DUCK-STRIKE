@@ -77,6 +77,7 @@ pnpm deploy       # 建置 + wrangler pages deploy
 - **視角模型軸向**：素材槍管沿 local +X，需繞 Y 轉 −90° 才朝螢幕內；槍口火光改用「相機相對偏移」而非槍模型節點，與各槍軸向解耦。
 - **世界座標→螢幕飄字**：`Vector3.Project` 用 `canvas.clientWidth/Height` 投影對齊 HUD（CSS 像素）；佈局未就緒時退回 `engine.getRenderWidth()` 避免投影出 NaN。
 - **指標鎖定競態**：不要每幀輪詢 `pointerLockElement` 來暫停（開局請求鎖定是非同步的會誤判）；改用 `pointerlockchange` 事件，只在「真的失去鎖定」時暫停。
+- **⚠️ 手機縮放誤觸（重要）**：手機連點畫面（尤其虛擬搖桿中央）會觸發瀏覽器縮放。`user-scalable=no` 在 **iOS Safari 被忽略**；`touch-action: manipulation` 對部分 iOS 的**雙擊縮放也無效**。**最終解**（`main.ts` 全域）：攔截 320ms 內的第二次 `touchend`（double-tap）與 `gesturestart`（pinch）並 `preventDefault()`；再搭配 `touch-action: manipulation`（`style.css`）+ viewport `maximum-scale=1`（`index.html`）。JS 攔截才是治本，缺一不可。
 
 ## 待辦（可延伸）
 - **盾兵**：正面擋彈、需繞背的敵人（角度判定）。
