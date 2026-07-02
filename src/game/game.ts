@@ -204,7 +204,7 @@ export class Game {
   private resolveHit(origin: Vector3, dir: Vector3, range: number) {
     const ray = new Ray(origin, dir, range)
     const pick = this.scene.pickWithRay(ray, (m: AbstractMesh) =>
-      m.isPickable && !!(m.metadata && (m.metadata.enemyRef || m.metadata.world)),
+      m.isPickable && !!(m.metadata && (m.metadata.enemyRef || m.metadata.world || m.metadata.barrel)),
     )
     if (pick && pick.hit && pick.pickedPoint) {
       return { point: pick.pickedPoint, normal: pick.getNormal(true) || Vector3.Up(), mesh: pick.pickedMesh! }
