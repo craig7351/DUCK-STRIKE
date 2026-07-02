@@ -12,8 +12,31 @@ export interface D1Database {
   prepare(query: string): D1PreparedStatement
   batch(statements: D1PreparedStatement[]): Promise<unknown[]>
 }
-export interface Env { DB: D1Database }
+export interface Env {
+  DB: D1Database
+  DELETE_KEY?: string        // 留言刪除管理鍵（Pages Secret）
+  TURNSTILE_SECRET?: string  // Turnstile 私鑰（Pages Secret）；未設 = 略過驗證
+}
 export interface Ctx { request: Request; env: Env }
+
+/**
+ * 驗證 Turnstile token。安全漸進式：
+ * - 未設 TURNSTILE_SECRET → 回 true（尚未啟用，不擋現有流量）
+ * - 已設但 token 缺/無效 → 回 false
+ */
+export async function verifyTurnstile(token: unknown, secret: string | undefined, ip?: string | null): Promise<boolean> {
+  if (!secret) return true
+  if (!token || typeof token !== 'string') return false
+  try {
+    const body = new URLSearchParams({ secret, response: token })
+    if (ip) body.set('remoteip', ip)
+    const r = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', { method: 'POST', body })
+    const d = (await r.json()) as { success?: boolean }
+    return !!d && d.success === true
+  } catch {
+    return false
+  }
+}
 
 export function json(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), {

@@ -1,9 +1,12 @@
 // POST /api/run — 提交一場成績到排行榜，並累加全站統計。
-import { Ctx, json, clampInt, sanitizeText, DIFFICULTIES } from './_lib'
+import { Ctx, json, clampInt, sanitizeText, verifyTurnstile, DIFFICULTIES } from './_lib'
 
 export const onRequestPost = async ({ request, env }: Ctx): Promise<Response> => {
   let b: any
   try { b = await request.json() } catch { return json({ error: 'bad json' }, 400) }
+  if (!(await verifyTurnstile(b.token, env.TURNSTILE_SECRET, request.headers.get('CF-Connecting-IP')))) {
+    return json({ error: 'turnstile' }, 403)
+  }
 
   const name = sanitizeText(b.name, 16) || '鴨鴨'
   const difficulty = DIFFICULTIES.includes(b.difficulty) ? b.difficulty : 'normal'

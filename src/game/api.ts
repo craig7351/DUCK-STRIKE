@@ -44,8 +44,8 @@ async function postJson(url: string, body: unknown): Promise<any | null> {
   } catch { return null }
 }
 
-export function submitScore(run: { name: string; score: number; wave: number; kills: number; difficulty: string }) {
-  void postJson('/api/run', { ...run, deviceId: getDeviceId() })   // fire-and-forget
+export function submitScore(run: { name: string; score: number; wave: number; kills: number; difficulty: string }, token?: string) {
+  void postJson('/api/run', { ...run, deviceId: getDeviceId(), token })   // fire-and-forget
 }
 export function fetchLeaderboard(limit = 10, difficulty?: string): Promise<LeaderRow[] | null> {
   const q = new URLSearchParams({ limit: String(limit) })
@@ -53,8 +53,8 @@ export function fetchLeaderboard(limit = 10, difficulty?: string): Promise<Leade
   return getJson<LeaderRow[]>(`/api/leaderboard?${q.toString()}`)
 }
 export function fetchMessages(): Promise<Msg[] | null> { return getJson<Msg[]>('/api/messages') }
-export async function postMessage(name: string, text: string, parentId = 0): Promise<boolean> {
-  const r = await postJson('/api/messages', { name, text, parentId, deviceId: getDeviceId() })
+export async function postMessage(name: string, text: string, parentId = 0, token?: string): Promise<boolean> {
+  const r = await postJson('/api/messages', { name, text, parentId, deviceId: getDeviceId(), token })
   return !!(r && r.ok)
 }
 export async function deleteMessage(id: number, key: string): Promise<boolean> {
